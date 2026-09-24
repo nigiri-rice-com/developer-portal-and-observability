@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="ja" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ service.name }} - サービス詳細 & 構成図 | Nigiri Developer Portal</title>
+  <link rel="stylesheet" href="{{ base_url }}/static/css/portal.css?v=1.4.0">
+  <!-- Inline theme detection script to prevent flicker -->
+  <script>
+    (function() {
+      const savedTheme = localStorage.getItem('nigiri_portal_theme');
+      const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
+        document.documentElement.classList.add('dark');
+        document.documentElement.classList.remove('light');
+      } else {
+        document.documentElement.classList.remove('dark');
+        document.documentElement.classList.add('light');
+      }
+    })();
+  </script>
+  <script src="{{ base_url }}/static/js/lucide.min.js"></script>
+  <!-- Mermaid.js for architecture & sequence diagrams -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <!-- GitHub-style Mermaid Pan & Zoom Controller -->
+  <script src="{{ base_url }}/static/js/panzoom.min.js?v=1.5.4"></script>
+  <script src="{{ base_url }}/static/js/mermaid-panzoom.js?v=1.5.4"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+JP:wght@400;500;700;900&display=swap');
+    body { font-family: 'Plus Jakarta Sans', 'Noto Sans JP', sans-serif; }
+    code, pre, .font-mono { font-family: 'JetBrains Mono', monospace; }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-emerald-50/40 via-slate-50 to-teal-50/30 dark:from-[#061210] dark:via-[#071714] dark:to-[#050f0d] text-slate-800 dark:text-slate-100 min-h-screen flex flex-col selection:bg-emerald-500 selection:text-white transition-colors duration-200">
+
+  <!-- Toast Notification Container -->
+  <div id="toastContainer" class="fixed bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- Header -->
+  <header class="border-b border-emerald-100/70 dark:border-emerald-950/70 backdrop-blur-xl bg-white/70 dark:bg-[#071815]/75 sticky top-0 z-40 shadow-sm transition-colors duration-200">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
+
+      <!-- Left: Breadcrumb -->
+      <div class="flex items-center gap-3 shrink-0">
+        <a href="{{ base_url }}/" class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 via-teal-500 to-emerald-600 flex items-center justify-center shadow-[0_8px_20px_-4px_rgba(16,185,129,0.4)] text-white text-xl font-bold select-none shrink-0 hover:scale-105 transition-transform" title="ポータルトップへ戻る">
+          🍙
+        </a>
+        <nav class="flex items-center gap-1.5 text-xs">
+          <a href="{{ base_url }}/" class="text-slate-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 font-medium transition-colors">
+            開発者ポータル
+          </a>
+          <span class="text-slate-300 dark:text-slate-600">/</span>
+          <span class="text-slate-500 dark:text-slate-400 font-medium hidden sm:inline">サービス詳細</span>
+          <span class="text-slate-300 dark:text-slate-600 hidden sm:inline">/</span>
+          <span class="font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5">
+            <i data-lucide="{{ service.icon }}" class="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400"></i>
+            {{ service.name }}
+          </span>
+        </nav>
+      </div>
+
+      <!-- Right: User Profile, Theme Switcher & Actions -->
+      <div class="flex items-center gap-2.5 shrink-0">
+        <!-- Theme Toggle Button -->
+        <button
+          onclick="toggleTheme()"
+          id="themeToggleBtn"
+          title="テーマ切り替え (ライト / ダーク)"
+          class="w-9 h-9 rounded-xl border border-slate-200 dark:border-emerald-900/60 bg-white/80 dark:bg-slate-900/80 text-slate-600 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 hover:border-emerald-300 dark:hover:border-emerald-500 transition-all flex items-center justify-center shadow-sm cursor-pointer"
+        >
+          <i id="themeToggleIcon" data-lucide="moon" class="w-4 h-4"></i>
+        </button>
+
+        <!-- Docs Link -->
+        <a href="{{ base_url }}/docs/{{ service.id }}" class="hidden sm:flex items-center gap-1.5 text-xs text-slate-700 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-emerald-900/60 bg-white/80 dark:bg-slate-900/80 transition-colors shadow-sm font-semibold">
+          <i data-lucide="book-open" class="w-3.5 h-3.5 text-emerald-500"></i>
+          <span>マニュアル</span>
+        </a>
+
+        <!-- Status Link -->
+        <a href="{{ base_url }}/status" class="hidden sm:flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400 px-3 py-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors shadow-sm font-semibold">
+          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span>ステータス</span>
+        </a>
+
+        <!-- Back to Top Button -->
+        <a href="{{ base_url }}/" class="flex items-center gap-1.5 text-xs text-slate-700 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-300 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-emerald-900/60 bg-white/80 dark:bg-slate-900/80 transition-colors shadow-sm font-semibold">
+          <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
+          <span class="hidden sm:inline">ポータルトップ</span>
+        </a>
+
+        <!-- Operator Card -->
+        <div class="flex items-center gap-2.5 pl-2 border-l border-slate-200 dark:border-emerald-950">
+          <div class="flex items-center gap-2.5 py-1 px-2 rounded-xl border border-emerald-100/70 dark:border-emerald-900/50 bg-white/60 dark:bg-slate-900/60 shadow-sm">
+            <div class="w-8 h-8 rounded-lg overflow-hidden bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center text-white font-bold text-xs shadow-sm shrink-0">
+              {% if user.picture %}
+                <img src="{{ user.picture }}" alt="{{ user.name }}" class="w-full h-full object-cover">
+              {% else %}
+                <span>{{ user.name[0] | upper }}</span>
+              {% endif %}
+            </div>
+            <div class="flex flex-col text-left min-w-0 pr-1">
+              <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 leading-tight">
+                {% if user.is_admin %}
+                  管理者
+                {% elif user.is_developer %}
+                  開発者
+                {% else %}
+                  ユーザー
+                {% endif %}
+              </span>
+              <div class="flex items-baseline gap-1 min-w-0 leading-tight">
+                <span class="text-xs font-extrabold text-slate-900 dark:text-slate-100 truncate max-w-[110px]">
+                  {% if user.family_name and user.given_name %}
+                    {{ user.family_name }} {{ user.given_name }}
+                  {% else %}
+                    {{ user.name }}
+                  {% endif %}
+                </span>
+                <span class="text-[10px] font-medium text-slate-400 dark:text-slate-500 font-mono truncate max-w-[70px]">
+                  ({{ user.username }})
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
+
+    <!-- Hero Service Header Card -->
+    <div class="bg-white/80 dark:bg-slate-900/70 border border-emerald-100/90 dark:border-emerald-950/80 rounded-3xl p-6 sm:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-none backdrop-blur-xl relative overflow-hidden">
+      <!-- Background Ambient Glow -->
+      <div class="absolute -right-20 -top-20 w-80 h-80 bg-emerald-500/10 dark:bg-emerald-500/5 rounded-full blur-3xl pointer-events-none"></div>
+
+      <div class="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <!-- Left: Icon & Title & Tags -->
+        <div class="flex items-start gap-4">
+          <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-100 dark:from-emerald-950/70 dark:to-teal-900/50 border border-emerald-200/80 dark:border-emerald-800/50 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shadow-md shrink-0">
+            <i data-lucide="{{ service.icon }}" class="w-8 h-8"></i>
+          </div>
+          <div class="space-y-1.5">
+            <div class="flex flex-wrap items-center gap-2">
+              <h1 class="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                {{ service.name }}
+              </h1>
+              <span class="text-xs font-bold uppercase px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                {{ service.tag }}
+              </span>
+              {% if service.sso_enabled %}
+                <span class="text-xs font-bold uppercase px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/25 flex items-center gap-1">
+                  <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+                  <span>SSO連携</span>
+                </span>
+              {% endif %}
+              <span class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/60 flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>{{ service.status }}</span>
+              </span>
+            </div>
+            <p class="text-xs sm:text-sm text-slate-600 dark:text-slate-300 max-w-3xl leading-relaxed">
+              {{ service.description }}
+            </p>
+          </div>
+        </div>
+
+        <!-- Right: Primary Action Buttons -->
+        <div class="flex flex-wrap items-center gap-2.5 shrink-0">
+          <a href="{{ service.public_url }}" target="_blank" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-600 to-emerald-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold text-xs sm:text-sm shadow-[0_4px_16px_rgba(16,185,129,0.35)] hover:shadow-[0_6px_20px_rgba(16,185,129,0.45)] hover:-translate-y-0.5 active:translate-y-0 transition-all">
+            <span>サービスを開く</span>
+            <i data-lucide="external-link" class="w-4 h-4"></i>
+          </a>
+          <a href="{{ base_url }}/docs/{{ service.id }}" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 font-bold text-xs sm:text-sm shadow-sm transition-all">
+            <i data-lucide="book-open" class="w-4 h-4 text-emerald-500"></i>
+            <span>運用ドキュメント</span>
+          </a>
+          <button onclick="copyToClipboard('{{ service.public_url }}', '公開URLをコピーしました')" class="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl border border-slate-200 dark:border-emerald-900/60 bg-white/80 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold shadow-sm transition-all" title="公開URLをコピー">
+            <i data-lucide="copy" class="w-4 h-4"></i>
+            <span class="hidden sm:inline">URLコピー</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 1: Interactive Architecture Visual Diagram -->
+    <section class="bg-white/80 dark:bg-slate-900/70 border border-emerald-100/90 dark:border-emerald-950/80 rounded-3xl p-6 sm:p-8 shadow-[0_4px_20px_rgb(0,0,0,0.03)] dark:shadow-none space-y-6">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-emerald-100/60 dark:border-slate-800/80 pb-4">
+        <div>
+          <h2 class="text-base sm:text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <i data-lucide="git-branch" class="w-5 h-5 text-emerald-600 dark:text-emerald-400"></i>
+            <span>システムアーキテクチャ & トラフィックフロー</span>
+          </h2>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            クライアントからエッジ、Kubernetesクラスタ、バックエンドDB・ストレージまでの通信経路と冗長化トポロジーです。
+          </p>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <button onclick="toggleMermaid()" id="mermaidToggleBtn" class="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100/80 transition-colors">
+            <i data-lucide="code" class="w-3.5 h-3.5"></i>
+            <span id="mermaidToggleText">Mermaid 構文を表示</span>
+          </button>
+          <button onclick="copyToClipboard(rawMermaidCode, 'Mermaid 構成図コードをコピーしました')" class="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors shadow-sm" title="Mermaidコードをクリップボードにコピー">
+            <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+            <span>Mermaid コピー</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Expandable Mermaid Raw Code Block -->
+      <div id="mermaidCodeBlock" class="hidden">
+        <div class="p-4 rounded-2xl bg-slate-950 border border-emerald-900/60 text-emerald-400 text-xs font-mono overflow-x-auto relative">
+          <div class="flex items-center justify-between mb-2 pb-2 border-b border-slate-800 text-[11px] text-slate-400">
+            <span>Mermaid Diagram Syntax</span>
+            <span>Outline や GitHub PR にそのまま貼り付け可能です</span>
+          </div>
+          <pre><code>{{ service.mermaid }}</code></pre>
+        </div>
+      </div>
+
+      <!-- Interactive Architecture Diagram (GitHub Style Pan & Zoom) -->
+      <div class="mermaid-panzoom-target">
+        <pre class="mermaid">{{ service.mermaid }}</pre>
+      </div>
+
+      <!-- Visual Step-by-Step Topology Component -->
+      <div class="space-y-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+          {% for step in service.topology %}
+            <div class="relative bg-slate-50/80 dark:bg-slate-950/60 border border-slate-200/70 dark:border-slate-800/80 rounded-2xl p-4 flex flex-col justify-between hover:border-emerald-400 dark:hover:border-emerald-500/50 transition-all group">
+              <div class="space-y-2">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-100/60 dark:bg-emerald-900/50 px-2.5 py-0.5 rounded-full">
+                    {{ step.step }}
+                  </span>
+                  <span class="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-md bg-slate-200/60 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                    {{ step.protocol }}
+                  </span>
+                </div>
+
+                <!-- Path Visualization -->
+                <div class="flex items-center gap-2 text-xs font-extrabold text-slate-900 dark:text-white pt-1">
+                  <span class="truncate">{{ step.from }}</span>
+                  <i data-lucide="arrow-right" class="w-3.5 h-3.5 text-emerald-500 group-hover:translate-x-0.5 transition-transform shrink-0"></i>
+                  <span class="truncate text-emerald-600 dark:text-emerald-400">{{ step.to }}</span>
+                </div>
+
+                <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                  {{ step.note }}
+                </p>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 2: Specifications & Configuration Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+      <!-- Card 1: Network & Endpoints -->
+      <div class="bg-white/80 dark:bg-slate-900/70 border border-emerald-100/90 dark:border-emerald-950/80 rounded-3xl p-6 shadow-sm space-y-4">
+        <h3 class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2 border-b border-emerald-100/60 dark:border-slate-800/80 pb-3">
+          <i data-lucide="globe" class="w-4 h-4 text-emerald-600 dark:text-emerald-400"></i>
+          <span>ネットワーク & エンドポイント</span>
+        </h3>
+
+        <div class="space-y-3 text-xs">
+          <div>
+            <span class="text-slate-500 dark:text-slate-400 block mb-1">公開ドメイン (DNS):</span>
+            <div class="flex items-center justify-between p-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/60 dark:border-slate-800">
+              <span class="font-mono font-semibold text-slate-800 dark:text-slate-200 truncate">{{ service.network.public_dns }}</span>
+              <button onclick="copyToClipboard('{{ service.network.public_dns }}', '公開ドメインをコピーしました')" class="text-slate-400 hover:text-emerald-500 p-1">
+                <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <span class="text-slate-500 dark:text-slate-400 block mb-1">内部クラスタ DNS:</span>
+            <div class="flex items-center justify-between p-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/60 dark:border-slate-800">
+              <span class="font-mono font-semibold text-slate-800 dark:text-slate-200 truncate">{{ service.network.internal_dns }}</span>
+              <button onclick="copyToClipboard('{{ service.network.internal_dns }}', '内部DNSをコピーしました')" class="text-slate-400 hover:text-emerald-500 p-1">
+                <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/60 dark:border-slate-800">
+            <span class="text-slate-500 dark:text-slate-400">内部ポート:</span>
+            <span class="font-mono font-bold text-slate-800 dark:text-slate-200">{{ service.network.internal_port }}</span>
+          </div>
+
+          <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/60 dark:border-slate-800">
+            <span class="text-slate-500 dark:text-slate-400 block mb-1">プロトコル & 終端:</span>
+            <span class="font-medium text-slate-800 dark:text-slate-200">{{ service.network.protocol }}</span>
+          </div>
+
+          <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/60 dark:border-slate-800">
+            <span class="text-slate-500 dark:text-slate-400 block mb-1">ルーティング経路:</span>
+            <span class="font-mono text-[11px] text-emerald-700 dark:text-emerald-400">{{ service.network.ingress_route }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 2: Kubernetes & Cluster Specs -->
+      <div class="bg-white/80 dark:bg-slate-900/70 border border-emerald-100/90 dark:border-emerald-950/80 rounded-3xl p-6 shadow-sm space-y-4">
+        <h3 class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2 border-b border-emerald-100/60 dark:border-slate-800/80 pb-3">
+          <i data-lucide="server" class="w-4 h-4 text-emerald-600 dark:text-emerald-400"></i>
+          <span>Kubernetes & クラスタ仕様</span>
+        </h3>
+
+        <div class="space-y-3 text-xs">
+          <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/60 dark:border-slate-800">
+            <span class="text-slate-500 dark:text-slate-400">所属 Namespace:</span>
+            <span class="font-mono font-bold text-emerald-700 dark:text-emerald-400">{{ service.k8s.namespace }}</span>
+          </div>
+
+          <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/60 dark:border-slate-800">
+            <span class="text-slate-500 dark:text-slate-400">ワークロード種別:</span>
+            <span class="font-semibold text-slate-800 dark:text-slate-200">{{ service.k8s.workload_type }}</span>
+          </div>
+
+          <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/60 dark:border-slate-800">
+            <span class="text-slate-500 dark:text-slate-400 block mb-0.5">冗長化 & レプリカ:</span>
+            <span class="font-semibold text-emerald-600 dark:text-emerald-400">{{ service.k8s.replicas }}</span>
+          </div>
+
+          <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/60 dark:border-slate-800">
+            <span class="text-slate-500 dark:text-slate-400 block mb-0.5">配置ノード:</span>
+            <span class="font-mono text-slate-800 dark:text-slate-200">{{ service.k8s.nodes }}</span>
+          </div>
+
+          <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/60 dark:border-slate-800">
+            <span class="text-slate-500 dark:text-slate-400 block mb-0.5">バックエンド DB / キャッシュ:</span>
+            <span class="font-semibold text-slate-800 dark:text-slate-200">{{ service.k8s.database }}</span>
+          </div>
+
+          <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/60 dark:border-slate-800">
+            <span class="text-slate-500 dark:text-slate-400 block mb-0.5">永続ストレージ:</span>
+            <span class="font-semibold text-slate-800 dark:text-slate-200">{{ service.k8s.storage }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 3: Auth & Security Specs -->
+      <div class="bg-white/80 dark:bg-slate-900/70 border border-emerald-100/90 dark:border-emerald-950/80 rounded-3xl p-6 shadow-sm space-y-4">
+        <h3 class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2 border-b border-emerald-100/60 dark:border-slate-800/80 pb-3">
+          <i data-lucide="shield-check" class="w-4 h-4 text-emerald-600 dark:text-emerald-400"></i>
+          <span>認証 & セキュリティ仕様</span>
+        </h3>
+
+        <div class="space-y-3 text-xs">
+          <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/60 dark:border-slate-800">
+            <span class="text-slate-500 dark:text-slate-400 block mb-0.5">認証プロバイダ:</span>
+            <span class="font-semibold text-slate-800 dark:text-slate-200">{{ service.auth.provider }}</span>
+          </div>
+
+          <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/60 dark:border-slate-800">
+            <span class="text-slate-500 dark:text-slate-400">レルム名:</span>
+            <span class="font-mono font-bold text-slate-800 dark:text-slate-200">{{ service.auth.realm }}</span>
+          </div>
+
+          <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/60 dark:border-slate-800">
+            <span class="text-slate-500 dark:text-slate-400">OIDC Client ID:</span>
+            <span class="font-mono font-bold text-emerald-600 dark:text-emerald-400">{{ service.auth.client_id }}</span>
+          </div>
+
+          <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/60 dark:border-slate-800">
+            <span class="text-slate-500 dark:text-slate-400 block mb-0.5">認証フロー:</span>
+            <span class="font-medium text-slate-800 dark:text-slate-200">{{ service.auth.auth_flow }}</span>
+          </div>
+
+          <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/60 dark:border-slate-800">
+            <span class="text-slate-500 dark:text-slate-400 block mb-1">アクセス可能ロール:</span>
+            <div class="flex flex-wrap gap-1">
+              {% for r in service.auth.allowed_roles %}
+                <span class="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
+                  {{ r }}
+                </span>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    {% if service.email_client_settings %}
+    <!-- Email Client Connection Guide (IMAP / SMTP) -->
+    <section class="bg-white/80 dark:bg-slate-900/70 border border-emerald-100/90 dark:border-emerald-950/80 rounded-3xl p-6 sm:p-8 shadow-sm space-y-6">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-emerald-100/60 dark:border-slate-800/80 pb-4">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
+            <h2 class="text-base sm:text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <i data-lucide="mail-check" class="w-5 h-5 text-emerald-600 dark:text-emerald-400"></i>
+              <span>メールソフト接続設定 (IMAP / SMTP クライアント設定ガイド)</span>
+            </h2>
+          </div>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+            iPhone、Android、Outlook、Thunderbird などの各種メーラーで送受信を行うための接続パラメータおよび設定手順です。
+          </p>
+        </div>
+        <a href="https://webmail.nigiri-rice.com" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 text-xs font-semibold px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white shadow-md transition-all shrink-0">
+          <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+          <span>SOGo Webmail を開く</span>
+        </a>
+      </div>
+
+      <!-- Quick Server Specs Cards (Incoming vs Outgoing) -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <!-- Incoming Mail (IMAP) Card -->
+        <div class="p-5 rounded-2xl bg-slate-50/90 dark:bg-slate-950/70 border border-slate-200/80 dark:border-slate-800/90 space-y-3.5">
+          <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800/80 pb-2.5">
+            <span class="text-xs font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5 uppercase tracking-wider">
+              <i data-lucide="inbox" class="w-4 h-4"></i>
+              受信メールサーバー (Incoming)
+            </span>
+            <span class="text-[11px] font-mono px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-bold border border-emerald-500/20">
+              IMAP (推奨)
+            </span>
+          </div>
+          <div class="space-y-2.5 text-xs">
+            <div class="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800">
+              <span class="text-slate-500 dark:text-slate-400">サーバー名 (ホスト):</span>
+              <div class="flex items-center gap-1.5">
+                <span class="font-mono font-bold text-slate-800 dark:text-slate-200">{{ service.email_client_settings.incoming.server }}</span>
+                <button onclick="copyToClipboard('{{ service.email_client_settings.incoming.server }}', '受信サーバー名をコピーしました')" class="text-slate-400 hover:text-emerald-500 p-1" title="コピー">
+                  <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                </button>
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <div class="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800">
+                <span class="text-[11px] text-slate-500 dark:text-slate-400 block">IMAP ポート:</span>
+                <div class="flex items-center justify-between mt-0.5">
+                  <span class="font-mono font-extrabold text-emerald-600 dark:text-emerald-400">{{ service.email_client_settings.incoming.imap_port }}</span>
+                  <span class="text-[10px] text-slate-500 font-medium">{{ service.email_client_settings.incoming.imap_security }}</span>
+                </div>
+              </div>
+              <div class="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800">
+                <span class="text-[11px] text-slate-500 dark:text-slate-400 block">POP3 ポート (代替):</span>
+                <div class="flex items-center justify-between mt-0.5">
+                  <span class="font-mono font-bold text-slate-700 dark:text-slate-300">{{ service.email_client_settings.incoming.pop_port }}</span>
+                  <span class="text-[10px] text-slate-500 font-medium">{{ service.email_client_settings.incoming.pop_security }}</span>
+                </div>
+              </div>
+            </div>
+            <div class="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800">
+              <span class="text-[11px] text-slate-500 dark:text-slate-400 block">ユーザー名:</span>
+              <span class="font-mono text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">{{ service.email_client_settings.incoming.username_hint }}</span>
+            </div>
+            <div class="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800">
+              <span class="text-[11px] text-slate-500 dark:text-slate-400 block">認証方式:</span>
+              <span class="font-medium text-slate-800 dark:text-slate-200">{{ service.email_client_settings.incoming.auth_method }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Outgoing Mail (SMTP) Card -->
+        <div class="p-5 rounded-2xl bg-slate-50/90 dark:bg-slate-950/70 border border-slate-200/80 dark:border-slate-800/90 space-y-3.5">
+          <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800/80 pb-2.5">
+            <span class="text-xs font-bold text-teal-700 dark:text-teal-400 flex items-center gap-1.5 uppercase tracking-wider">
+              <i data-lucide="send" class="w-4 h-4"></i>
+              送信メールサーバー (Outgoing)
+            </span>
+            <span class="text-[11px] font-mono px-2 py-0.5 rounded-md bg-teal-500/10 text-teal-700 dark:text-teal-400 font-bold border border-teal-500/20">
+              SMTP Auth 必須
+            </span>
+          </div>
+          <div class="space-y-2.5 text-xs">
+            <div class="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800">
+              <span class="text-slate-500 dark:text-slate-400">サーバー名 (ホスト):</span>
+              <div class="flex items-center gap-1.5">
+                <span class="font-mono font-bold text-slate-800 dark:text-slate-200">{{ service.email_client_settings.outgoing.server }}</span>
+                <button onclick="copyToClipboard('{{ service.email_client_settings.outgoing.server }}', '送信サーバー名をコピーしました')" class="text-slate-400 hover:text-emerald-500 p-1" title="コピー">
+                  <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                </button>
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <div class="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800">
+                <span class="text-[11px] text-slate-500 dark:text-slate-400 block">SMTP ポート (推奨):</span>
+                <div class="flex items-center justify-between mt-0.5">
+                  <span class="font-mono font-extrabold text-teal-600 dark:text-teal-400">{{ service.email_client_settings.outgoing.port_starttls }}</span>
+                  <span class="text-[10px] text-slate-500 font-medium">{{ service.email_client_settings.outgoing.security_starttls }}</span>
+                </div>
+              </div>
+              <div class="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800">
+                <span class="text-[11px] text-slate-500 dark:text-slate-400 block">SMTPS ポート (代替):</span>
+                <div class="flex items-center justify-between mt-0.5">
+                  <span class="font-mono font-bold text-slate-700 dark:text-slate-300">{{ service.email_client_settings.outgoing.port_ssl }}</span>
+                  <span class="text-[10px] text-slate-500 font-medium">{{ service.email_client_settings.outgoing.security_ssl }}</span>
+                </div>
+              </div>
+            </div>
+            <div class="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800">
+              <span class="text-[11px] text-slate-500 dark:text-slate-400 block">送信認証 (SMTP Auth):</span>
+              <span class="font-semibold text-teal-700 dark:text-teal-400">必須 (受信サーバーと同じアカウント情報を利用)</span>
+            </div>
+            <div class="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800">
+              <span class="text-[11px] text-slate-500 dark:text-slate-400 block">ユーザー名:</span>
+              <span class="font-mono text-[11px] font-semibold text-teal-700 dark:text-teal-400">{{ service.email_client_settings.outgoing.username_hint }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Critical Notice Callout -->
+      <div class="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex items-start gap-3">
+        <i data-lucide="alert-triangle" class="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5"></i>
+        <div class="space-y-1 text-xs">
+          <span class="font-bold text-amber-800 dark:text-amber-300">ユーザー名入力に関する重要事項</span>
+          <ul class="list-disc list-inside space-y-1 text-amber-900/80 dark:text-amber-200/80">
+            {% for note in service.email_client_settings.notes %}
+              <li>{{ note }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+
+      <!-- Client Specific Setup Guides -->
+      <div class="space-y-3">
+        <h3 class="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
+          <i data-lucide="smartphone" class="w-4 h-4 text-emerald-500"></i>
+          <span>主要メールソフト別 設定手順</span>
+        </h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {% for guide in service.email_client_settings.guides %}
+            <div class="p-4 rounded-2xl bg-slate-50/70 dark:bg-slate-950/50 border border-slate-200/70 dark:border-slate-800/80 space-y-2.5">
+              <div class="flex items-center gap-2 text-xs font-bold text-slate-900 dark:text-white">
+                <i data-lucide="{{ guide.icon }}" class="w-4 h-4 text-emerald-600 dark:text-emerald-400"></i>
+                <span>{{ guide.client }}</span>
+              </div>
+              <ol class="list-decimal list-inside space-y-1.5 text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed pl-1">
+                {% for st in guide.steps %}
+                  <li>{{ st }}</li>
+                {% endfor %}
+              </ol>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    </section>
+    {% endif %}
+
+    <!-- Section 3: Associated Credentials (Vault) -->
+    <section class="bg-white/80 dark:bg-slate-900/70 border border-emerald-100/90 dark:border-emerald-950/80 rounded-3xl p-6 sm:p-8 shadow-sm space-y-4">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-emerald-100/60 dark:border-slate-800/80 pb-3">
+        <div>
+          <h2 class="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <i data-lucide="shield-check" class="w-5 h-5 text-emerald-600 dark:text-emerald-400"></i>
+            <span>認証情報 & 機密シークレット (Credentials & Secrets)</span>
+          </h2>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            本サービスに紐づく接続アカウント、パスワード、APIトークン情報です。
+          </p>
+        </div>
+        <a href="https://vault.nigiri-rice.com/ui/vault/auth?with=oidc" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 transition-all shrink-0">
+          <i data-lucide="shield" class="w-3.5 h-3.5"></i>
+          <span>Vault で一元管理 (OIDC SSO)</span>
+          <i data-lucide="external-link" class="w-3 h-3"></i>
+        </a>
+      </div>
+
+      {% if matched_creds %}
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+          {% for c in matched_creds %}
+            <div class="p-4 rounded-2xl bg-slate-50/90 dark:bg-slate-950/70 border border-slate-200/80 dark:border-slate-800/90 space-y-3">
+              <div class="flex items-center justify-between gap-2">
+                <h4 class="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5 truncate">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                  <span>{{ c.title }}</span>
+                </h4>
+                <span class="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 shrink-0">
+                  {{ c.category }}
+                </span>
+              </div>
+
+              <div class="space-y-2 text-xs">
+                <!-- Identifier -->
+                <div class="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800">
+                  <span class="text-[11px] text-slate-500 dark:text-slate-400">識別子 / ID:</span>
+                  <div class="flex items-center gap-1.5">
+                    <span class="font-mono font-bold text-slate-800 dark:text-slate-200 text-xs">{{ c.identifier }}</span>
+                    <button onclick="copyToClipboard('{{ c.identifier }}', 'IDをコピーしました')" class="p-1 text-slate-400 hover:text-emerald-500 transition-colors" title="コピー">
+                      <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Secret -->
+                <div class="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800">
+                  <span class="text-[11px] text-slate-500 dark:text-slate-400">シークレット / パスワード:</span>
+                  <div class="flex items-center gap-1.5">
+                    <span id="secret-val-{{ c.id }}" class="font-mono font-bold text-emerald-600 dark:text-emerald-400 text-xs tracking-wider">••••••••••••</span>
+                    <button id="secret-btn-{{ c.id }}" onclick="toggleSecret('{{ c.id }}', '{{ c.secret }}')" class="p-1 text-slate-400 hover:text-emerald-500 transition-colors" title="表示/非表示">
+                      <i data-lucide="eye" class="w-3.5 h-3.5"></i>
+                    </button>
+                    <button onclick="copyToClipboard('{{ c.secret }}', 'シークレットをコピーしました')" class="p-1 text-slate-400 hover:text-emerald-500 transition-colors" title="コピー">
+                      <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                    </button>
+                  </div>
+                </div>
+
+                {% if c.description %}
+                  <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed pt-1 border-t border-slate-200/50 dark:border-slate-800/50">
+                    {{ c.description }}
+                  </p>
+                {% endif %}
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="p-4 rounded-2xl bg-slate-50/60 dark:bg-slate-950/40 border border-dashed border-slate-200 dark:border-slate-800 text-center py-6">
+          <i data-lucide="shield" class="w-6 h-6 text-slate-400 mx-auto mb-2"></i>
+          <p class="text-xs text-slate-500 dark:text-slate-400">
+            個別の静的シークレットは登録されていません。認証はすべて Keycloak OIDC SSO または Vault 経由で行われます。
+          </p>
+        </div>
+      {% endif %}
+    </section>
+
+    <!-- Section 4: DevOps Runbook & Commands -->
+    <section class="bg-white/80 dark:bg-slate-900/70 border border-emerald-100/90 dark:border-emerald-950/80 rounded-3xl p-6 sm:p-8 shadow-sm space-y-4">
+      <div class="flex items-center justify-between border-b border-emerald-100/60 dark:border-slate-800/80 pb-3">
+        <div>
+          <h2 class="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <i data-lucide="terminal" class="w-5 h-5 text-emerald-600 dark:text-emerald-400"></i>
+            <span>運用ランブック & よく使うコマンド集</span>
+          </h2>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            クラスター調査、ログ監視、再起動時に利用できる標準コマンドです。ワンクリックでコピーできます。
+          </p>
+        </div>
+        {% if service.k8s.manifest_path %}
+          <div class="hidden sm:flex items-center gap-1.5 text-xs font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-xl">
+            <i data-lucide="folder-git" class="w-3.5 h-3.5 text-emerald-500"></i>
+            <span>{{ service.k8s.manifest_path }}</span>
+          </div>
+        {% endif %}
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+        {% for cmd in service.commands %}
+          <div class="p-3.5 rounded-2xl bg-slate-950 border border-slate-800/80 flex flex-col justify-between gap-2">
+            <span class="text-[11px] font-medium text-slate-400 flex items-center gap-1.5">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+              {{ cmd.desc }}
+            </span>
+            <div class="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/50">
+              <code class="text-xs font-mono text-emerald-300 truncate select-all">{{ cmd.cmd }}</code>
+              <button onclick="copyToClipboard('{{ cmd.cmd }}', 'コマンドをコピーしました')" class="shrink-0 p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors" title="コマンドをコピー">
+                <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+              </button>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-emerald-100/70 dark:border-emerald-950/70 py-6 text-center text-xs text-slate-500 dark:text-slate-400 mt-auto bg-white/40 dark:bg-transparent transition-colors duration-200">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-2">
+      <span class="flex items-center gap-1.5 font-medium">
+        <span>&copy; 2026 nigiri-rice.com</span>
+        <span>&middot;</span>
+        <span class="text-emerald-600 dark:text-emerald-400">OmusuBI Dev Platform</span>
+      </span>
+      <div class="flex items-center gap-4 text-slate-500 dark:text-slate-400">
+        <a href="{{ base_url }}/" class="hover:text-emerald-600 dark:hover:text-slate-200 transition-colors">ポータルトップ</a>
+        <span>&middot;</span>
+        <a href="https://id.nigiri-rice.com/account" target="_blank" class="hover:text-emerald-600 dark:hover:text-slate-200 transition-colors">OmusuBI Console</a>
+        <span>&middot;</span>
+        <a href="https://docs.nigiri-rice.com" target="_blank" class="hover:text-emerald-600 dark:hover:text-slate-200 transition-colors">Docs</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Initialize Lucide icons
+    lucide.createIcons();
+
+    const rawMermaidCode = `{{ service.mermaid | safe }}`;
+
+    // Theme Toggle
+    function updateThemeIcon(theme) {
+      const icon = document.getElementById('themeToggleIcon');
+      if (!icon) return;
+      if (theme === 'dark') {
+        icon.setAttribute('data-lucide', 'sun');
+      } else {
+        icon.setAttribute('data-lucide', 'moon');
+      }
+      lucide.createIcons();
+    }
+
+    function toggleTheme() {
+      const isDark = document.documentElement.classList.contains('dark');
+      if (isDark) {
+        document.documentElement.classList.remove('dark');
+        document.documentElement.classList.add('light');
+        localStorage.setItem('nigiri_portal_theme', 'light');
+        updateThemeIcon('light');
+      } else {
+        document.documentElement.classList.add('dark');
+        document.documentElement.classList.remove('light');
+        localStorage.setItem('nigiri_portal_theme', 'dark');
+        updateThemeIcon('dark');
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const currentTheme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+      updateThemeIcon(currentTheme);
+    });
+
+    // Mermaid Code Toggle
+    let isMermaidVisible = false;
+    function toggleMermaid() {
+      const el = document.getElementById('mermaidCodeBlock');
+      const txt = document.getElementById('mermaidToggleText');
+      if (!el) return;
+      if (isMermaidVisible) {
+        el.classList.add('hidden');
+        txt.textContent = 'Mermaid 構文を表示';
+        isMermaidVisible = false;
+      } else {
+        el.classList.remove('hidden');
+        txt.textContent = 'Mermaid 構文を閉じる';
+        isMermaidVisible = true;
+      }
+    }
+
+    // Secret Toggle (Show / Hide)
+    const revealedSecrets = {};
+    function toggleSecret(id, secret) {
+      const valEl = document.getElementById('secret-val-' + id);
+      const btnEl = document.getElementById('secret-btn-' + id);
+      if (!valEl) return;
+
+      if (revealedSecrets[id]) {
+        valEl.textContent = '••••••••••••';
+        valEl.classList.add('tracking-wider');
+        btnEl.innerHTML = '<i data-lucide="eye" class="w-3.5 h-3.5"></i>';
+        revealedSecrets[id] = false;
+      } else {
+        valEl.textContent = secret;
+        valEl.classList.remove('tracking-wider');
+        btnEl.innerHTML = '<i data-lucide="eye-off" class="w-3.5 h-3.5"></i>';
+        revealedSecrets[id] = true;
+      }
+      lucide.createIcons();
+    }
+
+    // Copy to Clipboard with Toast Notification
+    function copyToClipboard(text, message = 'クリップボードにコピーしました') {
+      navigator.clipboard.writeText(text).then(() => {
+        showToast(message);
+      }).catch(err => {
+        showToast('コピーに失敗しました', true);
+      });
+    }
+
+    function showToast(message, isError = false) {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = `pointer-events-auto flex items-center gap-2 px-4 py-2.5 rounded-xl border text-xs shadow-2xl backdrop-blur-md transition-all duration-300 ${
+        isError ? 'bg-rose-900/90 border-rose-700 text-rose-100' : 'bg-white/95 dark:bg-slate-900/95 border-emerald-500/50 text-slate-800 dark:text-slate-100'
+      }`;
+      toast.innerHTML = `
+        <i data-lucide="${isError ? 'alert-circle' : 'check-circle'}" class="w-4 h-4 ${isError ? 'text-rose-400' : 'text-emerald-500'}"></i>
+        <span>${message}</span>
+      `;
+      container.appendChild(toast);
+      lucide.createIcons();
+
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(8px)';
+        setTimeout(() => toast.remove(), 300);
+      }, 2500);
+    }
+  </script>
+</body>
+</html>

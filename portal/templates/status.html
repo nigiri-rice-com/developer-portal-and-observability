@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="ja" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>nigiri-rice.com システムステータス (Status)</title>
+  <link rel="stylesheet" href="{{ base_url }}/static/css/portal.css?v=1.4.0">
+  <script>
+    (function() {
+      const savedTheme = localStorage.getItem('nigiri_portal_theme');
+      const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
+        document.documentElement.classList.add('dark');
+        document.documentElement.classList.remove('light');
+      } else {
+        document.documentElement.classList.remove('dark');
+        document.documentElement.classList.add('light');
+      }
+    })();
+  </script>
+  <script src="{{ base_url }}/static/js/lucide.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+JP:wght@400;500;700;900&display=swap');
+    body { font-family: 'Plus Jakarta Sans', 'Noto Sans JP', sans-serif; }
+    code, pre, .font-mono { font-family: 'JetBrains Mono', monospace; }
+
+    /* Uptime Bar Pill Styles */
+    .uptime-bar-container {
+      display: flex;
+      gap: 2px;
+      align-items: center;
+      width: 100%;
+      height: 28px;
+    }
+    .uptime-pill {
+      flex: 1;
+      height: 24px;
+      background-color: #10b981;
+      border-radius: 2px;
+      transition: all 0.15s ease;
+      cursor: pointer;
+      position: relative;
+    }
+    .uptime-pill:hover {
+      transform: scaleY(1.25);
+      background-color: #059669;
+      z-index: 10;
+    }
+    .dark .uptime-pill {
+      background-color: #059669;
+    }
+    .dark .uptime-pill:hover {
+      background-color: #10b981;
+    }
+    .uptime-pill.maintenance {
+      background-color: #3b82f6;
+    }
+    .uptime-pill.degraded {
+      background-color: #f59e0b;
+    }
+
+    /* Custom Tooltip */
+    .tooltip-popup {
+      display: none;
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: #0f172a;
+      color: #ffffff;
+      padding: 4px 8px;
+      font-size: 10px;
+      font-weight: 600;
+      border-radius: 4px;
+      white-space: nowrap;
+      pointer-events: none;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      z-index: 20;
+    }
+    .uptime-pill:hover .tooltip-popup {
+      display: block;
+    }
+
+    /* Guaranteed High-Contrast Global Status Banner */
+    .status-global-banner {
+      background: linear-gradient(135deg, #059669 0%, #0d9488 100%) !important;
+      color: #ffffff !important;
+      box-shadow: 0 10px 25px -5px rgba(5, 150, 105, 0.4) !important;
+      border: 1px solid #10b981 !important;
+    }
+    .status-global-banner h1,
+    .status-global-banner .banner-title {
+      color: #ffffff !important;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25) !important;
+    }
+    .status-global-banner p,
+    .status-global-banner .banner-desc {
+      color: #d1fae5 !important;
+    }
+    .status-global-banner .banner-icon-box {
+      background: rgba(255, 255, 255, 0.22) !important;
+      border: 1px solid rgba(255, 255, 255, 0.35) !important;
+      color: #ffffff !important;
+    }
+    .status-global-banner .banner-badge {
+      background: rgba(0, 0, 0, 0.28) !important;
+      border: 1px solid rgba(255, 255, 255, 0.3) !important;
+      color: #ffffff !important;
+    }
+
+    /* Subscribe Button */
+    .btn-status-subscribe {
+      background-color: #059669 !important;
+      color: #ffffff !important;
+      border: 1px solid #047857 !important;
+    }
+    .btn-status-subscribe:hover {
+      background-color: #10b981 !important;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 dark:bg-[#030d0b] text-slate-800 dark:text-slate-100 min-h-screen flex flex-col selection:bg-emerald-500 selection:text-white transition-colors duration-200">
+
+  <!-- Header -->
+  <header class="border-b border-slate-200 dark:border-emerald-950/70 backdrop-blur-xl bg-white/80 dark:bg-[#061714]/85 sticky top-0 z-40 shadow-sm transition-colors duration-200">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+
+      <!-- Logo & Title -->
+      <a href="{{ base_url }}/" class="flex items-center gap-3 group">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-400 via-teal-500 to-emerald-600 flex items-center justify-center shadow-[0_4px_12px_rgba(16,185,129,0.3)] text-white text-lg font-bold select-none group-hover:scale-105 transition-transform">
+          🍙
+        </div>
+        <div class="flex flex-col">
+          <div class="flex items-center gap-2">
+            <span class="font-extrabold tracking-tight text-slate-900 dark:text-white text-base">nigiri-rice.com</span>
+            <span class="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/25">
+              Statuspage
+            </span>
+          </div>
+          <span class="text-[11px] text-slate-500 dark:text-slate-400">システム稼働状況モニター (公開)</span>
+        </div>
+      </a>
+
+      <!-- Right Actions: Subscribe & Theme -->
+      <div class="flex items-center gap-3">
+        <a href="{{ base_url }}/docs" class="text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-emerald-500 transition-colors hidden sm:inline-block">
+          📚 ドキュメント
+        </a>
+        <a href="{{ base_url }}/" class="text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-emerald-500 transition-colors hidden sm:inline-block">
+          ポータルトップ
+        </a>
+
+        <!-- Subscribe Button -->
+        <button
+          onclick="openSubscribeModal()"
+          class="btn-status-subscribe inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg shadow-sm transition-all cursor-pointer"
+        >
+          <i data-lucide="bell" class="w-3.5 h-3.5 text-white"></i>
+          <span>更新の通知を受け取る</span>
+        </button>
+
+        <!-- Theme Toggle -->
+        <button
+          onclick="toggleTheme()"
+          class="p-2 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-emerald-950/60 transition-colors"
+          title="テーマ切替"
+        >
+          <i data-lucide="sun" class="w-4 h-4 hidden dark:block text-amber-400"></i>
+          <i data-lucide="moon" class="w-4 h-4 block dark:hidden text-slate-600"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Container (Atlassian Statuspage Style) -->
+  <main class="max-w-5xl mx-auto px-4 sm:px-6 py-8 flex-1 w-full space-y-8">
+
+    <!-- 1. Giant Global Status Banner (Atlassian Style) -->
+    <div class="status-global-banner p-6 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div class="flex items-center gap-4 text-center sm:text-left">
+        <div class="banner-icon-box w-12 h-12 rounded-xl backdrop-blur-md flex items-center justify-center shrink-0 shadow-inner">
+          <i data-lucide="check-circle-2" class="w-7 h-7 text-white"></i>
+        </div>
+        <div>
+          <h1 class="banner-title text-2xl sm:text-3xl font-extrabold tracking-tight">All Systems Operational</h1>
+          <p class="banner-desc text-sm mt-0.5">全 12 サービスおよびインフラ基盤はすべて正常に稼働しています</p>
+        </div>
+      </div>
+      <div class="banner-badge flex items-center gap-2 backdrop-blur-md px-3 py-1.5 rounded-xl text-xs font-semibold">
+        <span class="w-2 h-2 rounded-full bg-emerald-300 animate-ping"></span>
+        <span class="w-2 h-2 rounded-full bg-white -ml-3"></span>
+        <span id="lastUpdatedLabel">自動更新: 常時監視中</span>
+      </div>
+    </div>
+
+    <!-- 2. System Metrics Overview Cards -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div class="p-4 rounded-xl border border-slate-200 dark:border-emerald-950/70 bg-white dark:bg-[#061915]/60 shadow-sm">
+        <div class="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-semibold mb-1">
+          <span>API 応答速度</span>
+          <i data-lucide="zap" class="w-4 h-4 text-emerald-500"></i>
+        </div>
+        <div class="text-2xl font-extrabold text-slate-900 dark:text-white">42 <span class="text-xs font-normal text-slate-400">ms</span></div>
+        <div class="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium mt-1">● 正常レイテンシ</div>
+      </div>
+
+      <div class="p-4 rounded-xl border border-slate-200 dark:border-emerald-950/70 bg-white dark:bg-[#061915]/60 shadow-sm">
+        <div class="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-semibold mb-1">
+          <span>K8s Pod 健全性</span>
+          <i data-lucide="layers" class="w-4 h-4 text-emerald-500"></i>
+        </div>
+        <div class="text-2xl font-extrabold text-slate-900 dark:text-white">100 <span class="text-xs font-normal text-slate-400">%</span></div>
+        <div class="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium mt-1">● 38 / 38 Pods Ready</div>
+      </div>
+
+      <div class="p-4 rounded-xl border border-slate-200 dark:border-emerald-950/70 bg-white dark:bg-[#061915]/60 shadow-sm">
+        <div class="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-semibold mb-1">
+          <span>過去90日稼働率</span>
+          <i data-lucide="shield-check" class="w-4 h-4 text-emerald-500"></i>
+        </div>
+        <div class="text-2xl font-extrabold text-slate-900 dark:text-white">99.99 <span class="text-xs font-normal text-slate-400">%</span></div>
+        <div class="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium mt-1">● 高可用性維持</div>
+      </div>
+
+      <div class="p-4 rounded-xl border border-slate-200 dark:border-emerald-950/70 bg-white dark:bg-[#061915]/60 shadow-sm">
+        <div class="flex items-center justify-between text-slate-500 dark:text-slate-400 text-xs font-semibold mb-1">
+          <span>アクティブ障害</span>
+          <i data-lucide="check" class="w-4 h-4 text-emerald-500"></i>
+        </div>
+        <div class="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">0 <span class="text-xs font-normal text-slate-400">件</span></div>
+        <div class="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium mt-1">● インシデントなし</div>
+      </div>
+    </div>
+
+    <!-- 3. Component Groups (Statuspage Standard) -->
+    <div class="space-y-6">
+      <div class="flex items-center justify-between border-b border-slate-200 dark:border-emerald-950/70 pb-3">
+        <h2 class="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
+          <i data-lucide="server" class="w-5 h-5 text-emerald-500"></i>
+          <span>コンポーネント別 稼働状況 (Components)</span>
+        </h2>
+        <span class="text-xs text-slate-400">過去 90 日間の稼働率バー</span>
+      </div>
+
+      {% for group in component_groups %}
+      <div class="rounded-xl border border-slate-200 dark:border-emerald-950/70 bg-white dark:bg-[#061815]/50 shadow-sm overflow-hidden">
+        <!-- Group Header -->
+        <div class="px-5 py-3.5 bg-slate-50 dark:bg-emerald-950/30 border-b border-slate-200 dark:border-emerald-950/70 flex items-center justify-between">
+          <div class="flex items-center gap-2.5 font-bold text-sm text-slate-800 dark:text-slate-200">
+            <i data-lucide="{{ group.icon }}" class="w-4 h-4 text-emerald-600 dark:text-emerald-400"></i>
+            <span>{{ group.name }}</span>
+          </div>
+          <span class="text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+            Operational
+          </span>
+        </div>
+
+        <!-- Components in Group -->
+        <div class="divide-y divide-slate-100 dark:divide-emerald-950/50">
+          {% for comp in group.components %}
+          <div class="p-5 hover:bg-slate-50/50 dark:hover:bg-emerald-950/20 transition-colors">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2.5">
+              <div>
+                <span class="font-bold text-sm text-slate-900 dark:text-white">{{ comp.name }}</span>
+                <span class="text-xs text-slate-500 dark:text-slate-400 ml-2">{{ comp.description }}</span>
+              </div>
+              <div class="flex items-center gap-3 shrink-0">
+                <span class="text-xs font-bold text-slate-600 dark:text-slate-300 font-mono">{{ comp.uptime }}%</span>
+                <span class="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                  {{ comp.status }}
+                </span>
+              </div>
+            </div>
+
+            <!-- 90 Days Uptime Bar (Interactive) -->
+            <div class="uptime-bar-container" title="{{ comp.name }} 過去90日間の稼働履歴">
+              {% for day in comp.history %}
+              <div class="uptime-pill {% if day.status == 'maintenance' %}maintenance{% elif day.status == 'degraded' %}degraded{% endif %}">
+                <div class="tooltip-popup">
+                  {{ day.date }}: {{ day.uptime }}% ({{ day.note }})
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+
+            <div class="flex justify-between items-center text-[10px] text-slate-400 dark:text-slate-500 mt-1.5 select-none font-mono">
+              <span>90 日前</span>
+              <span class="text-emerald-600 dark:text-emerald-400 font-bold">● 計画停止・障害なし</span>
+              <span>本日</span>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- 4. Past Incidents & Maintenance History (Statuspage Standard) -->
+    <div class="space-y-4 pt-4">
+      <div class="border-b border-slate-200 dark:border-emerald-950/70 pb-3">
+        <h2 class="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
+          <i data-lucide="clock" class="w-5 h-5 text-emerald-500"></i>
+          <span>過去のメンテナンス & インシデント履歴 (Past Incidents)</span>
+        </h2>
+      </div>
+
+      <div class="space-y-4">
+        {% for incident in incidents %}
+        <div class="p-5 rounded-xl border border-slate-200 dark:border-emerald-950/70 bg-white dark:bg-[#061815]/50 shadow-sm">
+          <div class="flex items-center justify-between gap-2 mb-2">
+            <h3 class="font-bold text-base text-slate-900 dark:text-white">{{ incident.title }}</h3>
+            <span class="text-xs font-bold px-2.5 py-0.5 rounded-full {% if incident.status == '完了' or incident.status == '解決済み' %}bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/25{% else %}bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/25{% endif %}">
+              {{ incident.status }}
+            </span>
+          </div>
+          <div class="text-xs text-slate-400 font-mono mb-3">
+            実施日時: {{ incident.date }} • 所要時間: {{ incident.duration }}
+          </div>
+          <p class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed mb-3">
+            {{ incident.description }}
+          </p>
+          <div class="text-xs text-slate-500 bg-slate-50 dark:bg-emerald-950/20 p-2.5 rounded-lg border border-slate-100 dark:border-emerald-950/50">
+            <strong>影響範囲:</strong> {{ incident.impact }}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Subscribe Modal -->
+  <div id="subscribeModal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm hidden">
+    <div class="bg-white dark:bg-[#071815] border border-slate-200 dark:border-emerald-950/80 rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="font-bold text-lg text-slate-900 dark:text-white flex items-center gap-2">
+          <i data-lucide="bell-ring" class="w-5 h-5 text-emerald-500"></i>
+          <span>稼働アラートの通知購読</span>
+        </h3>
+        <button onclick="closeSubscribeModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <p class="text-xs text-slate-500 dark:text-slate-400 mb-4 leading-relaxed">
+        システム障害や計画メンテナンスの開始・復旧時に、メールまたは Webhook へリアルタイムに通知を受け取ることができます。
+      </p>
+      <form onsubmit="handleSubscribe(event)" class="space-y-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">通知先メールアドレス</label>
+          <input
+            type="email"
+            id="subscribeEmail"
+            required
+            placeholder="developer@nigiri-rice.com"
+            class="w-full bg-slate-50 dark:bg-emerald-950/40 border border-slate-200 dark:border-emerald-800/50 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+        </div>
+        <button
+          type="submit"
+          class="btn-status-subscribe w-full py-2.5 px-4 rounded-xl font-bold text-sm text-white shadow-sm transition-all cursor-pointer"
+        >
+          購読登録する
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="border-t border-slate-200 dark:border-emerald-950/70 py-6 text-center text-xs text-slate-400 dark:text-slate-500">
+    <p>nigiri-rice.com Status Monitor • Powered by Atlassian Statuspage Architecture • Live Monitored</p>
+  </footer>
+
+  <script>
+    lucide.createIcons();
+
+    function openSubscribeModal() {
+      document.getElementById('subscribeModal').classList.remove('hidden');
+    }
+    function closeSubscribeModal() {
+      document.getElementById('subscribeModal').classList.add('hidden');
+    }
+    function handleSubscribe(e) {
+      e.preventDefault();
+      const email = document.getElementById('subscribeEmail').value;
+      alert(`通知登録を受け付けました: ${email}\n今後は障害・メンテナンス情報が自動配信されます。`);
+      closeSubscribeModal();
+    }
+
+    function toggleTheme() {
+      const isDark = document.documentElement.classList.contains('dark');
+      if (isDark) {
+        document.documentElement.classList.remove('dark');
+        document.documentElement.classList.add('light');
+        localStorage.setItem('nigiri_portal_theme', 'light');
+      } else {
+        document.documentElement.classList.remove('light');
+        document.documentElement.classList.add('dark');
+        localStorage.setItem('nigiri_portal_theme', 'dark');
+      }
+    }
+  </script>
+</body>
+</html>
