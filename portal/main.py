@@ -132,11 +132,27 @@ INFRA_DATA = [
     },
     {
         "name": "WordPress MariaDB (内部)",
-        "description": "nigiri-rice.com ホームページ用データベース / ローカルボリューム永続化",
+        "description": "nigiri-rice.com ポートフォリオ・公式サイト用データベース / ローカルボリューム永続化",
         "ip": "mariadb.nigiri-homepage.svc.cluster.local",
         "port": "3306",
         "command": "mysql -h mariadb.nigiri-homepage.svc.cluster.local -u wordpress -p wordpress",
         "type": "Database"
+    },
+    {
+        "name": "Secure Share ゲートウェイ (脱PPAP / OTP)",
+        "description": "メール添付自動リンク化・暗号化共有エンジン / Port 10029 (HTTP) & 10028 (Filter)",
+        "ip": "127.0.0.1 (nigiri-vps)",
+        "port": "10029 / 10028",
+        "command": "systemctl status mailcow-secure-share.service",
+        "type": "Security"
+    },
+    {
+        "name": "Secure Print 印刷ゲートウェイ (オンデマンド印刷)",
+        "description": "AES-256-GCM 暗号化スプール / QR近接照合 / Port 10029 & RAW Socket 9100",
+        "ip": "127.0.0.1 (nigiri-vps)",
+        "port": "10029 (HTTP) / 9100 (RAW)",
+        "command": "systemctl status mailcow-secure-share.service",
+        "type": "Printing / Security"
     },
     {
         "name": "Ingress-NGINX コントローラー (NodePort)",

@@ -180,6 +180,20 @@ def get_status_page_data() -> Dict[str, Any]:
                         "status": "Operational",
                         "uptime": "99.99",
                         "history": generate_90_days_history(99.99, "2026-09-07")
+                    },
+                    {
+                        "name": "Secure Print (オンデマンド印刷)",
+                        "description": "print.nigiri-rice.com / AES-256-GCM / QR近接認証",
+                        "status": "Operational",
+                        "uptime": "100.0",
+                        "history": generate_90_days_history(100.0)
+                    },
+                    {
+                        "name": "Secure Share (脱PPAPファイル共有)",
+                        "description": "fs.nigiri-rice.com/portal / メールOTP認証 / AES-256",
+                        "status": "Operational",
+                        "uptime": "99.99",
+                        "history": generate_90_days_history(99.99, "2026-09-18")
                     }
                 ]
             },
@@ -219,6 +233,14 @@ def get_status_page_data() -> Dict[str, Any]:
             }
         ],
         "incidents": [
+            {
+                "title": "セキュア・オンデマンド印刷基盤 (print.nigiri-rice.com) 本運用配備 & 開発ポータル掲載",
+                "date": "2026-10-03 08:30 JST",
+                "duration": "20 分",
+                "status": "完了",
+                "description": "AES-256-GCM 暗号化スプール、Keycloak SSO 本人限定認証、現地QRコード近接照合（Release-on-Arrival）、動的フリート台帳、貼付用QRステッカー発行を備えた本運用印刷基盤を開設し、開発ポータルに統合。",
+                "impact": "新規サービス稼働開始 (既存環境への影響なし)"
+            },
             {
                 "title": "HashiCorp Vault SSO 標準化 & OIDC デフォルトログイン設定",
                 "date": "2026-09-11 01:40 JST",

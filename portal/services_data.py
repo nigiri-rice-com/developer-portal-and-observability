@@ -193,8 +193,8 @@ SERVICES_DATA: Dict[str, Dict[str, Any]] = {
         "category": "ID & 認証基盤",
         "tag": "Admin",
         "icon": "key",
-        "description": "レルム設定、クライアント管理、ユーザー・ロールマッピング、Discordソーシャル連携の認証コア基盤。",
-        "status": "正常稼働中 (HA 2 Pods 冗長構成)",
+        "description": "OmusuBI 統合認証認可コア基盤。レルム設定、OIDC/SAMLクライアント管理、ユーザー・ロールマッピング、Discordソーシャル連携、個人アカウント管理画面(/account)のOmusuBI Console自動302リダイレクトを統括。",
+        "status": "正常稼働中 (HA 2 Pods / 302リダイレクト & WebAuthn/TOTP対応)",
         "status_color": "emerald",
         "public_url": "https://sso.nigiri-rice.com/admin/master/console/",
         "sso_enabled": True,
@@ -224,7 +224,7 @@ SERVICES_DATA: Dict[str, Dict[str, Any]] = {
             "allowed_roles": ["admin"]
         },
         "topology": [
-            {"step": "1. 認証リクエスト", "from": "All Apps & Users", "to": "Cloudflare Edge", "protocol": "HTTPS :443", "note": "sso.nigiri-rice.com"},
+            {"step": "1. 認証リクエスト", "from": "All Apps & Users", "to": "Cloudflare Edge", "protocol": "HTTPS :443", "note": "sso.nigiri-rice.com (個人アカウント画面アクセス時は /portal/account へ自動302転送)"},
             {"step": "2. プロキシルーティング", "from": "Cloudflare Edge", "to": "Caddy (nigiri-vps)", "protocol": "HTTPS :443", "note": "TLS終端 & Ingress 30180"},
             {"step": "3. サービス分散", "from": "Ingress-NGINX", "to": "omusubi-core (Service)", "protocol": "ClusterIP :8080", "note": "ラウンドロビン負荷分散"},
             {"step": "4. 冗長 Pod 処理", "from": "omusubi-core (Svc)", "to": "omusubi-core-pod-1 & 2", "protocol": "HTTP :8080", "note": "nigiri-vps & vps-worker-04"},
@@ -249,12 +249,12 @@ SERVICES_DATA: Dict[str, Dict[str, Any]] = {
     },
     "omusubi_console": {
         "id": "omusubi_console",
-        "name": "OmusuBI Console",
+        "name": "OmusuBI Console (統合ID・アカウント管理)",
         "category": "ID & 認証基盤",
-        "tag": "IdP",
+        "tag": "IdP / Account",
         "icon": "user-check",
-        "description": "統合ID管理、ソーシャルアカウント連携、アカウント設定コンソール。ユーザー自身による登録・設定画面です。",
-        "status": "正常稼働中 (HA 2 Pods 冗長構成)",
+        "description": "統合ID・アカウント管理コンソール。パスキー（WebAuthn / 生体認証・FIDO2）登録・管理、Google Authenticator等のワンタイムパスワード（TOTP/OTP）設定、ソーシャル連携、プロファイル編集を提供。",
+        "status": "正常稼働中 (HA 2 Pods / パスキー & TOTP設定画面完備)",
         "status_color": "emerald",
         "public_url": "https://id.nigiri-rice.com",
         "sso_enabled": True,
@@ -365,8 +365,8 @@ SERVICES_DATA: Dict[str, Dict[str, Any]] = {
         "category": "コミュニケーション",
         "tag": "Email",
         "icon": "mail",
-        "description": "独自ドメインメール送受信基盤・SOGo Webmail インターフェース。DKIM/SPF/DMARC 完備のメールサーバーです。",
-        "status": "正常稼働中 (Docker Compose マルチコンテナ)",
+        "description": "独自ドメインメール送受信基盤・SOGo Webmail。DKIM/SPF/DMARC完備に加え、Secure Share 脱PPAP送信フィルタ（Port 10028）と連動し、添付ファイルを自動分離・安全な共有リンクへ変換。",
+        "status": "正常稼働中 (Docker Compose + 脱PPAPフィルタ連携)",
         "status_color": "emerald",
         "public_url": "https://webmail.nigiri-rice.com",
         "sso_enabled": True,
@@ -747,11 +747,11 @@ SERVICES_DATA: Dict[str, Dict[str, Any]] = {
     },
     "wordpress": {
         "id": "wordpress",
-        "name": "WordPress (公式サイト)",
-        "category": "Webサイト",
-        "tag": "CMS",
+        "name": "WordPress (ポートフォリオ & 公式サイト)",
+        "category": "ポートフォリオ / CMS",
+        "tag": "Portfolio",
         "icon": "layout",
-        "description": "nigiri-rice.com 公式ホームページ。会社概要、ニュース、サービス紹介を掲載しています。",
+        "description": "nigiri-rice.com 公式ポートフォリオ・Webサイト。デザイン・開発実績、クリエイティブ作品集、会社概要、お知らせ、事業紹介を掲載・発信しています。",
         "status": "正常稼働中 (K8s Namespace: nigiri-homepage)",
         "status_color": "emerald",
         "public_url": "https://www.nigiri-rice.com",
@@ -880,6 +880,138 @@ SERVICES_DATA: Dict[str, Dict[str, Any]] = {
             {"desc": "SMB ファイル監視リアルタイム同期デーモン確認", "cmd": "systemctl status nextcloud-smb-watch.service"},
             {"desc": "Samba 4 AD DC サービス稼働状態確認", "cmd": "systemctl status samba-ad-dc"}
         ]
+    },
+    "secure_share": {
+        "id": "secure_share",
+        "name": "Secure Share (脱PPAP ファイル共有ゲートウェイ)",
+        "category": "セキュリティ / 添付共有",
+        "tag": "脱PPAP / OTP",
+        "icon": "shield",
+        "description": "メール添付ファイルの脱PPAP自動リンク化および外部セキュアファイル共有ゲートウェイ。ワンタイム確認コード(OTP)認証、AES-256-GCM暗号化ストレージ、日時指定による期限延長/短縮、送信無効化/再有効化、送信許可トグル、管理者一括操作、ダークモード対応UIを完備。",
+        "status": "正常稼働中 (Systemd: mailcow-secure-share / Port 10029 & 10028)",
+        "status_color": "emerald",
+        "public_url": "https://fs.nigiri-rice.com/portal",
+        "sso_enabled": True,
+        "cred_keyword": "secureshare",
+        "network": {
+            "public_dns": "fs.nigiri-rice.com",
+            "internal_dns": "127.0.0.1 (nigiri-vps)",
+            "internal_port": "10029 (HTTP / Secure Share Engine) / 10028 (Postfix Outbound Filter)",
+            "protocol": "HTTPS (TLS Termination via Caddy)",
+            "ingress_route": "外部アクセス -> Cloudflare -> VPS Caddy (/share/*, /outbound/*, /manage/*, /portal*) -> 127.0.0.1:10029"
+        },
+        "k8s": {
+            "namespace": "Host Systemd (nigiri-vps)",
+            "workload_type": "Systemd Service (mailcow-secure-share + mailcow-outbound-filter)",
+            "replicas": "1 Service (Python asyncio / aiohttp)",
+            "nodes": "nigiri-vps (Host 210.131.211.17)",
+            "database": "SQLite (WAL Mode / /var/lib/mailcow-secure-share/shares.db)",
+            "storage": "Encrypted Local Storage (/var/lib/mailcow-secure-share/payloads/)",
+            "gitops_repo": "N/A (Host /opt/mailcow-attachment-linker)",
+            "manifest_path": "/etc/systemd/system/mailcow-secure-share.service"
+        },
+        "auth": {
+            "provider": "OmusuBI Keycloak (OIDC SSO) ＆ 受信者ワンタイム確認コード (OTP)",
+            "realm": "master (社内ユーザー管理) / メールOTP (社外受信者用)",
+            "client_id": "secure-share (OIDC Client)",
+            "auth_flow": "社内: Keycloak SSO (Admin/ユーザー別送信履歴・管理画面) / 社外: メールワンタイムコード",
+            "allowed_roles": ["admin", "Developer", "User"]
+        },
+        "topology": [
+            {"step": "1. メール送信検知", "from": "Mailcow Postfix", "to": "mailcow-outbound-filter", "protocol": "Milter / Proxy :10028", "note": "添付ファイルを自動抽出し暗号化保管、本文にセキュア共有URLを挿入"},
+            {"step": "2. 外部受信者アクセス", "from": "Recipient Browser", "to": "Cloudflare Edge", "protocol": "HTTPS :443", "note": "https://fs.nigiri-rice.com/share/{token}"},
+            {"step": "3. リバースプロキシ", "from": "Cloudflare Edge", "to": "VPS Caddy", "protocol": "HTTPS :443", "note": "127.0.0.1:10029 へ転送"},
+            {"step": "4. メールOTP認証", "from": "mailcow-secure-share", "to": "Mailcow SMTP", "protocol": "SMTP :25 / 587", "note": "受信者メール宛てに6桁確認コードを自動即時送信"},
+            {"step": "5. ダウンロード提供", "from": "mailcow-secure-share", "to": "Recipient Browser", "protocol": "HTTPS :443", "note": "OTP検証成功後、暗号化ファイルを復号してZIP/個別ダウンロード (テーマ切替対応)"},
+            {"step": "6. 送信履歴・無効化管理", "from": "Sender / Admin (社内)", "to": "VPS Caddy (/portal /manage)", "protocol": "OIDC SSO", "note": "Keycloak SSOログイン後、日時指定による期限延長/短縮、無効化/再有効化、管理者一括操作が可能"}
+        ],
+        "mermaid": """graph TD
+    Sender["社内送信者 (Thunderbird / Webmail)"] -->|SMTP:587| Postfix["Mailcow Postfix"]
+    Postfix -->|Filter:10028| OutFilter["mailcow-outbound-filter"]
+    OutFilter -->|添付抽出 & 暗号化| Storage["暗号化保管庫: /var/lib/mailcow-secure-share"]
+    OutFilter -->|本文置換: 共有リンク挿入| Postfix
+    Postfix -->|外部送信| Recipient["社外受信者"]
+    
+    Recipient -->|"HTTPS: 共有リンクアクセス (/share/...)"| Caddy["VPS Caddy (fs.nigiri-rice.com)"]
+    Caddy -->|Proxy:10029| ShareApp["mailcow-secure-share (Python Engine)"]
+    ShareApp -->|6桁確認コード発行| Postfix
+    Postfix -->|OTPメール送信| Recipient
+    Recipient -->|OTPコード入力| ShareApp
+    ShareApp -->|復号 & ダウンロード| Recipient
+    
+    Sender -->|"管理ポータル (/manage)"| Caddy
+    Caddy -->|OIDC Auth| Keycloak["Keycloak SSO (sso.nigiri-rice.com)"]
+    Keycloak -->|認証成功| ShareApp
+    ShareApp -->|送信取り消し / 期限延長 / 閲覧履歴| Sender""",
+        "commands": [
+            {"desc": "セキュアファイル共有 サービス稼働状態確認", "cmd": "systemctl status mailcow-secure-share.service"},
+            {"desc": "アウトバウンド自動リンク化フィルタ 稼働状態確認", "cmd": "systemctl status mailcow-outbound-filter.service"},
+            {"desc": "セキュア共有 リアルタイムアクセスログ監視", "cmd": "journalctl -u mailcow-secure-share -f --tail=50"},
+            {"desc": "アウトバウンドフィルタ ログ監視", "cmd": "journalctl -u mailcow-outbound-filter -f --tail=50"},
+            {"desc": "セキュアファイル共有 サービス再起動", "cmd": "systemctl restart mailcow-secure-share mailcow-outbound-filter"}
+        ]
+    },
+    "secure_print": {
+        "id": "secure_print",
+        "name": "OmusuBI Universal Secure Print (オンデマンド印刷基盤)",
+        "category": "印刷 / セキュリティ",
+        "tag": "Pull-Print / QR認証",
+        "icon": "printer",
+        "description": "家庭用小型プリンターからオフィス大型複合機まで対応するゼロトラスト・オンデマンド印刷基盤。AES-256-GCM暗号化スプール、社外秘漏洩を防ぐKeycloak SSO本人認証、現地QRコード近接照合（Release-on-Arrival）、動的フリート台帳管理、実寸A4/シール用紙貼付用QRステッカー発行、保持期間ライフサイクル（Public: 7日、Personal: 3日、+1日延長、安全削除モーダル）を完備。",
+        "status": "正常稼働中 (Systemd: mailcow-secure-share / Port 10029 & RAW:9100)",
+        "status_color": "emerald",
+        "public_url": "https://print.nigiri-rice.com",
+        "sso_enabled": True,
+        "cred_keyword": "secureprint",
+        "network": {
+            "public_dns": "print.nigiri-rice.com",
+            "internal_dns": "127.0.0.1 (nigiri-vps)",
+            "internal_port": "10029 (HTTP / aiohttp Gateway) / 9100 (RAW Socket) / 631 (IPP)",
+            "protocol": "HTTPS (TLS Termination via Caddy / Cloudflare Full SSL)",
+            "ingress_route": "外部/社内アクセス -> Cloudflare -> VPS Caddy (print.nigiri-rice.com) -> 127.0.0.1:10029 -> WireGuard/宅内LAN -> プリンター実機:9100"
+        },
+        "k8s": {
+            "namespace": "Host Systemd (nigiri-vps)",
+            "workload_type": "Systemd Service (mailcow-secure-share.service)",
+            "replicas": "1 Service (Python asyncio / aiohttp)",
+            "nodes": "nigiri-vps (Host 210.131.211.17)",
+            "database": "JSON Dynamic Fleet DB (/srv/secure-shares/print_spool/printers.json)",
+            "storage": "Encrypted Spool Directory (/srv/secure-shares/print_spool/)",
+            "gitops_repo": "https://github.com/nigiri-rice-com/print.nigiri-rice.com.git",
+            "manifest_path": "config/systemd/mailcow-secure-share.service & config/caddy/print.nigiri-rice.com.caddy"
+        },
+        "auth": {
+            "provider": "OmusuBI Keycloak (OIDC SSO) ＆ プリンター実機QRセキュリティトークン",
+            "realm": "master (社内共通認証)",
+            "client_id": "print-gateway (OIDC Client)",
+            "auth_flow": "Keycloak SSO ログイン (Public/Personal共通) ＋ 現地QRコード近接スキャン照合",
+            "allowed_roles": ["admin", "Developer", "User"]
+        },
+        "topology": [
+            {"step": "1. ジョブ登録", "from": "Client Browser", "to": "Cloudflare / Caddy", "protocol": "HTTPS :443", "note": "Keycloak SSO認証を経て印刷ドキュメントをスプール登録"},
+            {"step": "2. 暗号化スプール", "from": "Gateway Engine", "to": "Local Storage", "protocol": "File I/O", "note": "平文をディスクに残さずメモリ上で AES-256-GCM 暗号化して格納"},
+            {"step": "3. 現地到着 & 照合要求", "from": "User Smartphone / PC", "to": "Gateway Engine", "protocol": "HTTPS :443", "note": "プリンター前に移動し「印刷」押下後カメラで本体貼付QRをスキャン"},
+            {"step": "4. トークン照合 & 解錠", "from": "Gateway Engine", "to": "Dynamic Fleet DB", "protocol": "JSON Lookup", "note": "256-bit暗号トークンを照合しプリンターを即時特定・出力解錠"},
+            {"step": "5. 復号 & RAW送出", "from": "Gateway Engine", "to": "Target Printer", "protocol": "TCP :9100 / 631", "note": "WireGuardトンネル経由で実機へPostScript/DirectPrintバイナリをRAWソケット送出"},
+            {"step": "6. 確実抹消 & 保持管理", "from": "Spool Cleaner", "to": "Local Storage", "protocol": "OS Unlink", "note": "印刷完了時または期限切れ（Public: 7日 / Personal: 3日）で暗号化バイナリを完全抹消"}
+        ],
+        "mermaid": """graph TD
+    User["利用者 (社内PC / スマホ)"] -->|"HTTPS (Keycloak SSO)"| Caddy["VPS Caddy (print.nigiri-rice.com)"]
+    Caddy -->|Proxy:10029| Gateway["Print Gateway (aiohttp)"]
+    Gateway -->|AES-256-GCM暗号化| Spool[("暗号化スプール: print_spool/")]
+    Gateway <-->|台帳 & トークン| FleetDB[("動的台帳: printers.json")]
+    
+    User -->|"現地到着: 貼付QRコードをスキャン"| Gateway
+    Gateway -->|QRトークン検証| FleetDB
+    Gateway -->|復号 & RAW Socket送出| Brother["Brother MFC-J998DN (10.155.0.155:9100)"]
+    Gateway -->|復号 & RAW Socket送出| Canon["Canon iR-ADV C5550 (10.155.0.180:9100)"]""",
+        "commands": [
+            {"desc": "印刷ゲートウェイ サービス稼働状態確認", "cmd": "systemctl status mailcow-secure-share.service"},
+            {"desc": "印刷ゲートウェイ リアルタイムアクセスログ監視", "cmd": "journalctl -u mailcow-secure-share -f --tail=50"},
+            {"desc": "プリンター死活監視 & スプール健全性診断", "cmd": "python3 /opt/mailcow-attachment-linker/health_check.py"},
+            {"desc": "プリンター実機 TCP 疎通テスト (Brother MFC-J998DN)", "cmd": "nc -z -v -w3 10.155.0.155 9100"},
+            {"desc": "印刷ゲートウェイ サービス再起動", "cmd": "systemctl restart mailcow-secure-share.service"}
+        ]
     }
 }
 
@@ -887,6 +1019,8 @@ def get_service_detail(service_id: str) -> Optional[Dict[str, Any]]:
     aliases = {
         "mailcow": "webmail",
         "mail": "webmail",
+        "print": "secure_print",
+        "printer": "secure_print",
     }
     target_id = aliases.get(service_id, service_id)
     return SERVICES_DATA.get(target_id)
@@ -934,8 +1068,10 @@ OVERALL_MERMAID = """graph TB
             end
         end
 
-        subgraph Docker_Standalone ["VPS 独立 Docker サービス"]
+        subgraph Docker_Standalone ["VPS 独立 Docker / システムサービス"]
             Mailcow["Mailcow-dockerized<br/>mail.nigiri-rice.com<br/>(SMTP:25,587, IMAP:993, Web:8448)"]
+            Secure_Share["Secure Share ゲートウェイ<br/>fs.nigiri-rice.com/portal (/share)<br/>(脱PPAP / OTP認証 / Port 10029 & 10028)"]
+            Secure_Print["Secure Print (オンデマンド印刷)<br/>print.nigiri-rice.com<br/>(AES-256-GCM / QR近接認証 / Port 10029)"]
             AFFiNE["AFFiNE Knowledge Base<br/>affine.nigiri-rice.com (Port 8083)"]
             Portainer_Host["Portainer Server<br/>manage.nigiri-rice.com:8082"]
             Monitoring["Prometheus / cAdvisor<br/>Node Exporter"]
@@ -1003,6 +1139,9 @@ OVERALL_MERMAID = """graph TB
     Dev --> CF_Tunnel --> Node_Master
     Caddy --> Ingress_Nginx
     Caddy --> Mailcow
+    Caddy --> Secure_Share
+    Caddy --> Secure_Print
+    Secure_Print -->|"WireGuard / LAN RAW:9100"| Switch_LAN
     Caddy --> AFFiNE
     Caddy --> Portainer_Host
     Caddy -->|"Tailscale HTTP:8080 (fs.nigiri-rice.com)"| CT_FS_AD

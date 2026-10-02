@@ -39,10 +39,10 @@ CATEGORIES = [ { 'description': 'Qiita準拠の7つの必須ドキュメント�
 
 DOCS = {
   'fs-storage': {
-    'badges': ['7つの必須ドキュメント準拠', 'Verified: 2026-09-24', 'SSO Admin権限自動付与', 'OSS公開リポジトリあり', 'Samba 4 AD (NIGIRI)'],
+    'badges': ['7つの必須ドキュメント準拠', 'Verified: 2026-10-02', 'SSO Admin権限自動付与', 'OSS公開リポジトリあり', 'Samba 4 AD (NIGIRI-RICE)'],
     'category_id': 'storage',
     'category_name': 'ストレージ & レジストリ',
-    'content_html': '\n<p class="lead text-lg text-slate-600 dark:text-slate-300 mb-6">\n  Nextcloud Hub (v35) と Samba 4 Active Directory DC を統合した、次世代エンタープライズ・クラウドストレージ基盤。<br>\n  さらに今後の運用負荷軽減のため、超軽量 Go 製ストレージ「Cloudreve」への段階移行に対応しています。<br>\n  iOS / Android の公式アプリに標準対応し、Windows / Mac からの SMB ダイレクトマウント（<code>\\\\10.155.0.144\\public</code>）および WebUI（<code>https://fs.nigiri-rice.com</code>）から全方位でシームレスに操作可能です。<br>\n  個人個別フォルダは作成せず、全員が1つの共通共有ストレージ（<code>/Public</code>）を一元利用するシンプルかつ実用的な設計を採用しています。\n</p>\n\n<div class="gh-alert gh-alert-tip mb-6">\n  <div class="gh-alert-title"><i data-lucide="github" class="w-4 h-4 shrink-0"></i><span>オープンソース公開情報 & 開発記録</span></div>\n  <div class="gh-alert-body">\n    本アーキテクチャの完全な設定テンプレートと同期スクリプトは GitHub にて OSS (MIT License) として公開されています。<br>\n    ・<strong>GitHub リポジトリ:</strong> <a href="https://github.com/nigiri-rice-com/hybrid-cloud-storage" target="_blank" class="underline text-emerald-600 dark:text-emerald-400 font-semibold">nigiri-rice-com/hybrid-cloud-storage</a><br>\n    ・<strong>公式開発記録記事:</strong> <a href="https://www.nigiri-rice.com/2026/09/24/hybrid-cloud-storage-architecture/" target="_blank" class="underline text-emerald-600 dark:text-emerald-400 font-semibold">設計と構築の技術詳細（WordPress）</a>\n  </div>\n</div>\n\n<div class="gh-alert gh-alert-note">\n  <div class="gh-alert-title"><i data-lucide="info" class="w-4 h-4 shrink-0"></i><span>7つの必須ドキュメント準拠</span></div>\n  <div class="gh-alert-body">本ページは Qiita 策定基準に基づき、要件定義・技術選定・DB設計・画面/API・遷移フロー・運用Runbook・復旧手順の7要素を完全網羅しています。</div>\n</div>\n\n<h2 id="sec-1-requirements" class="text-2xl font-bold mt-10 mb-4 pb-2 border-b border-slate-200 dark:border-emerald-950/70">1. 要件定義書 (Requirements)</h2>\n<div class="space-y-4 mb-6">\n  <h3 class="text-lg font-semibold text-emerald-600 dark:text-emerald-400">プロジェクト目的 & 背景</h3>\n  <p>Windows Server に依存しないオープンソースの Active Directory ドメインコントローラと、スマホ（iOS/Android）・PC（SMB）・ブラウザ（WebUI）の全デバイスから即時アクセス可能なクラウドストレージ基盤を構築すること。</p>\n  <h3 class="text-lg font-semibold text-emerald-600 dark:text-emerald-400">成功の基準 (KPI / 動作基準)</h3>\n  <ul class="list-disc pl-6 space-y-1">\n    <li><strong>マルチクライアント対応:</strong> iOS「ファイル」アプリ、Android Nextcloud 公式アプリ、Windows PC SMB マウント、WebUI のすべてから同一共有フォルダを操作可能。</li>\n    <li><strong>単一共有ストレージ運用:</strong> ユーザー個別領域を作成せず、全ユーザーが共通共有ストレージ（<code>/srv/shares/public</code>）を閲覧・編集可能。</li>\n    <li><strong>SSO Admin 権限自動昇格:</strong> OmusuBI (Keycloak) で <code>admin</code> ロールを持つユーザーに対し、Nextcloud の <code>admin</code> グループ（全管理者権限）および Samba <code>Domain Admins</code> を自動付与。</li>\n    <li><strong>ドメイン名統一:</strong> Samba ドメイン名（Workgroup）を <code>nigiri-rice</code>（NetBIOS: <code>NIGIRI-RICE</code>）に設定し、SSO アカウントと完全同期。</li>\n    <li><strong>双方向リアルタイム同期:</strong> Windows SMB 側で変更されたファイルが <code>inotifywait</code> により 1 秒以内に Nextcloud にインデックス反映されること。</li>\n    <li><strong>ID プロビジョニング連携:</strong> OmusuBI (Keycloak) を Source of Truth とし、5分間隔で Samba 4 AD DC および Nextcloud にユーザー・グループが自動同期されること。</li>\n  </ul>\n</div>\n\n<h2 id="sec-2-techstack" class="text-2xl font-bold mt-10 mb-4 pb-2 border-b border-slate-200 dark:border-emerald-950/70">2. 技術スタック & 選定理由</h2>\n<p class="mb-4">本システムで採用されている技術コンポーネントとその選定理由です：</p>\n<div class="table-responsive"><table class="gh-table"><thead><tr><th>カテゴリ / レイヤー</th><th>採用技術 / バージョン</th><th>選定理由・メリット</th></tr></thead><tbody>\n<tr><td>クラウドストレージ (現行)</td><td>Nextcloud Hub v35 (Hub 10)</td><td>iOS / Android 公式アプリ対応、WebDAV、iOS「ファイル」アプリ統合、写真自動バックアップ</td></tr>\n<tr><td>クラウドストレージ (移行先)</td><td>Cloudreve v3.8+ (Go Binary)</td><td>超軽量（メモリ数十MB）、高速起動、React モダンWebUI、ローカルストレージ透過連携</td></tr>\n<tr><td>ディレクトリ & SMB</td><td>Samba 4.17+ AD DC (nigiri-rice)</td><td>Windows AD DS 互換ドメインコントローラ、Kerberos 認証、高速 SMB 3.1.1 共有</td></tr>\n<tr><td>Web サーバー</td><td>Nginx 1.22 + PHP 8.3-FPM</td><td>Nextcloud 最適化構成、大容量ファイル（16GB+）アップロード、HTTP/2 対応</td></tr>\n<tr><td>データベース</td><td>MariaDB 10.11 (InnoDB utf8mb4)</td><td>Nextcloud / Cloudreve ファイルメタデータ、権限、タグの高速トランザクション処理</td></tr>\n<tr><td>キャッシュ & ロック</td><td>Redis 7.0</td><td>セッションキャッシュおよび分散ファイルロック（Memcache & Locking）</td></tr>\n<tr><td>リアルタイム検知</td><td>inotify-tools (inotifywait)</td><td>SMB 経由のファイル追加・更新をカーネルレベルで即座に検知しストレージへ自動同期</td></tr>\n<tr><td>リバースプロキシ</td><td>Caddy v2 (VPS)</td><td>Let\'s Encrypt 自動 TLS 終端、Cloudflare プロキシバイパス（100MB制限回避）、WebDAV リダイレクト</td></tr>\n</tbody></table></div>\n\n<h2 id="sec-3-database" class="text-2xl font-bold mt-10 mb-4 pb-2 border-b border-slate-200 dark:border-emerald-950/70">3. データベース & ストレージ設計</h2>\n<div class="space-y-4 mb-6">\n  <p>Proxmox VE ホスト上の特権 LXC コンテナ <code>CT 144 (fs-ad-server)</code> 内の ZFS プール上にストレージが配置されています：</p>\n  <ul class="list-disc pl-6 space-y-1">\n    <li><strong>共通共有ストレージ:</strong> <code>/srv/shares/public</code> (POSIX ACL: <code>u:www-data:rwx,g:www-data:rwx,o:rwx</code>, default ACL 継承)</li>\n    <li><strong>Nextcloud マウント:</strong> <code>files_external</code> (Local) によりルート直下に <code>/Public</code> として自動マウント</li>\n    <li><strong>Cloudreve 連携パス:</strong> ストレージ保存ルールを <code>{path}/{filename}</code> とし、<code>/srv/shares/public</code> と直接同期</li>\n    <li><strong>個人クォータ制限:</strong> <code>default_quota => 0 B</code> に設定し、個人専用領域を使わせず共通ストレージへ誘導</li>\n    <li><strong>Samba 共有設定:</strong> <code>oplocks = no</code>, <code>level2 oplocks = no</code> により Windows キャッシュによる同期遅延を防止</li>\n  </ul>\n</div>\n\n<h2 id="sec-4-screen-api" class="text-2xl font-bold mt-10 mb-4 pb-2 border-b border-slate-200 dark:border-emerald-950/70">4. 画面 & API 仕様 (モバイル / PC / リモート接続 / SSO Admin)</h2>\n<div class="space-y-4 mb-6">\n  <h3 class="text-lg font-semibold text-emerald-600 dark:text-emerald-400">🌐 リモート環境からの 3 つの接続方法</h3>\n  <p>外出先・自宅・スマホなどリモート環境からファイルサーバーを利用する方法です：</p>\n  <ul class="list-disc pl-6 space-y-2 text-sm mb-4">\n    <li><strong>方式1: Web ブラウザ（VPN 不要・世界中から直接アクセス）</strong><br>\n      URL: <code>https://fs.nigiri-rice.com/</code><br>\n      OmusuBI SSO（Keycloak）でログイン。ファイルのドラッグ＆ドロップ、大容量アップロード、PDF・文書プレビュー、外部共有リンク発行が可能。</li>\n    <li><strong>方式2: スマホアプリ（iOS / Android）</strong><br>\n      「Nextcloud」公式アプリでサーバーアドレスに <code>https://fs.nigiri-rice.com</code> を設定。iOS 標準「ファイル」アプリ統合およびカメラロール自動写真バックアップが社外からそのまま動作します。</li>\n    <li><strong>方式3: リモート PC からのエクスプローラー SMB マウント（Tailscale VPN 経由）</strong><br>\n      SMB（Port 445）は安全のため Tailscale 暗号化トンネルを経由します。リモート端末で Tailscale にログインしていれば、社外でも社内 LAN と全く同様に以下の構文でマウント可能です。</li>\n  </ul>\n\n  <h3 class="text-lg font-semibold text-emerald-600 dark:text-emerald-400">🔑 OmusuBI SSO Admin ロール管理者権限マッピング</h3>\n  <p class="text-sm">Keycloak (OmusuBI SSO) において <code>admin</code> ロールを付与されているアカウントは、Nextcloud へ OIDC SSO ログインした際に自動的に Nextcloud の <code>admin</code> グループへマッピングされます。<br>\n  これにより、特別な管理者ログインURLや個別パスワードを使用せず、OmusuBI の SSO 認証のみで全管理機能（システム設定、ユーザー管理、アプリ管理）へアクセス可能になります。</p>\n\n  <h3 class="text-lg font-semibold text-emerald-600 dark:text-emerald-400">💻 Windows / Mac PC からの SMB マウント手順 (ドメイン: nigiri-rice)</h3>\n  <div class="code-block-wrapper">\n    <div class="code-header"><span class="code-lang">powershell</span></div>\n    <pre><code class="language-powershell"># Windows PowerShell / コマンドプロンプト\nnet use \\\\\\\\10.155.0.144\\\\public /user:nigiri-rice\\\\i.shimamoto <SSOパスワード></code></pre>\n  </div>\n  <p class="text-xs text-slate-500 mt-1">※ユーザー名は <code>nigiri-rice\\&lt;ユーザー名&gt;</code> または <code>&lt;ユーザー名&gt;@nigiri-rice.com</code> を指定してください。</p>\n</div>\n\n<h2 id="sec-5-flow" class="text-2xl font-bold mt-10 mb-4 pb-2 border-b border-slate-200 dark:border-emerald-950/70">5. 処理フロー & シーケンス図</h2>\n<p class="mb-4">マルチデバイスからのアクセスと双方向同期のアーキテクチャフローです：</p>\n<div class="mermaid-wrapper my-6 p-4 rounded-xl border border-slate-200 dark:border-emerald-950/60 bg-slate-50/50 dark:bg-emerald-950/10">\n<pre class="mermaid text-sm">sequenceDiagram\n    autonumber\n    actor Mobile as スマホ (iOS/Android)\n    actor PC as Windows / Mac (Tailscale)\n    participant Caddy as VPS Caddy (fs.nigiri-rice.com)\n    participant NC as Nextcloud Hub / Cloudreve (CT 144)\n    participant KC as OmusuBI Keycloak (sso.nigiri-rice.com)\n    participant Watch as inotifywait Watcher\n    participant Storage as 共通共有 /srv/shares/public\n    participant Samba as Samba 4 AD (nigiri-rice)\n\n    rect rgb(240, 253, 250)\n    Note over Mobile,KC: 経路 A: SSO ログイン & Admin権限自動付与\n    Mobile->>Caddy: HTTPS :443 (fs.nigiri-rice.com)\n    Caddy->>NC: Tailscale Proxy (Port 8080)\n    NC->>KC: OIDC 認証リクエスト\n    KC-->>NC: ID Token (roles: [admin])\n    NC->>NC: admin グループ自動割当 (全権昇格)\n    NC->>Storage: POSIX ACL 経由で直接読み書き\n    end\n\n    rect rgb(254, 243, 199)\n    Note over PC,NC: 経路 B: リモート / 社内 PC (SMB) からの直接書き込み\n    PC->>Samba: SMB Port 445 (Tailscale VPN経由)\n    Samba->>Storage: ディスク書き込み\n    Storage->>Watch: Linux カーネル inotify イベント発火\n    Watch->>NC: occ / sync スキャン即時実行\n    NC-->>Mobile: モバイルアプリ / WebUI に即座にプッシュ反映\n    end\n</pre>\n</div>\n\n<h2 id="sec-6-runbook" class="text-2xl font-bold mt-10 mb-4 pb-2 border-b border-slate-200 dark:border-emerald-950/70">6. README & 運用保守手順書 (Runbook)</h2>\n<p class="mb-4">障害調査やメンテナンス時に実行する主要コマンド集です：</p>\n<div class="space-y-4 mb-6">\n  <div class="code-block-wrapper">\n    <div class="code-header"><span class="code-lang">bash</span></div>\n    <pre><code class="language-bash"># CT 144 へログイン\nssh root@10.155.0.144\n\n# Nextcloud 診断ステータス確認\nsudo -u www-data php /var/www/nextcloud/occ status\n\n# Nextcloud OIDC Admin ロール権限マッピング設定 (groupsクレームとadminグループの紐付け)\nsudo -u www-data php /var/www/nextcloud/occ user_oidc:provider:update 1 \\\n  --mapping-groups=groups \\\n  --group-mapping=\'{\"admin\": \"admin\", \"Admin\": \"admin\"}\'\n\n# admin グループ所属ユーザー確認\nsudo -u www-data php /var/www/nextcloud/occ group:list-members admin\n\n# 手動での管理者権限付与 (即時有効化)\nsudo -u www-data php /var/www/nextcloud/occ group:adduser admin i.shimamoto\n\n# 全ファイル手動スキャン\nsudo -u www-data php /var/www/nextcloud/occ files:scan --all\n\n# SMB ファイル監視デーモンの稼働状態\nsystemctl status nextcloud-smb-watch.service\n\n# Samba 4 AD DC ドメインコントローラの状態 (nigiri-rice)\nsystemctl status samba-ad-dc\n\n# OmusuBI からのユーザー/グループ同期手動実行\npython3 /usr/local/bin/sync_omusubi_to_samba.py\n</code></pre>\n  </div>\n</div>\n\n<h2 id="sec-7-setup" class="text-2xl font-bold mt-10 mb-4 pb-2 border-b border-slate-200 dark:border-emerald-950/70">7. 障害復旧 & Cloudreve 移行計画</h2>\n<div class="space-y-4 mb-6">\n  <h3 class="text-lg font-semibold text-emerald-600 dark:text-emerald-400">Cloudreve 段階的移行ステップ</h3>\n  <ol class="list-decimal pl-6 space-y-1 text-sm">\n    <li><strong>バイナリ配置:</strong> CT 144 上に Cloudreve 公式 amd64 バイナリを設置し、Port 5212 で起動。</li>\n    <li><strong>ストレージマウント:</strong> 保存先ディレクトリを <code>/srv/shares/public</code>、命名規則を <code>{path}/{filename}</code> に指定。</li>\n    <li><strong>Keycloak OAuth 2.0 連携:</strong> OmusuBI SSO クライアント <code>cloudreve</code> を作成し、SSO ログインを検証。</li>\n    <li><strong>並行検証:</strong> VPS Caddy に <code>drive.nigiri-rice.com</code> を追加し、Nextcloud を止めずに並行テスト。</li>\n    <li><strong>本番昇格:</strong> 検証完了後、<code>fs.nigiri-rice.com</code> の転送先を Port 5212 へ切り替え。</li>\n  </ol>\n\n  <h3 class="text-lg font-semibold text-emerald-600 dark:text-emerald-400">MariaDB バックアップ & リストア</h3>\n  <div class="code-block-wrapper">\n    <div class="code-header"><span class="code-lang">bash</span></div>\n    <pre><code class="language-bash"># バックアップ取得\nmariadb-dump -u nextcloud -p\'${DB_PASSWORD}\' nextcloud > /var/backups/nextcloud-$(date +%Y%m%d).sql\n\n# リストア手順\nmariadb -u nextcloud -p\'${DB_PASSWORD}\' nextcloud < /var/backups/nextcloud-20260918.sql\nsudo -u www-data php /var/www/nextcloud/occ maintenance:mode --off</code></pre>\n  </div>\n</div>\n',
+    'content_html': '\n<p class="lead text-lg text-slate-600 dark:text-slate-300 mb-6">\n  Nextcloud Hub (v35) と Samba 4 Active Directory DC を統合した、次世代エンタープライズ・クラウドストレージ基盤。<br>\n  さらに今後の運用負荷軽減のため、超軽量 Go 製ストレージ「Cloudreve」への段階移行に対応しています。<br>\n  iOS / Android の公式アプリに標準対応し、Windows / Mac からの SMB ダイレクトマウント（<code>\\\\10.155.0.144\\public</code>）および WebUI（<code>https://fs.nigiri-rice.com</code>）から全方位でシームレスに操作可能です。<br>\n  個人個別フォルダは作成せず、全員が1つの共通共有ストレージ（<code>/Public</code>）を一元利用するシンプルかつ実用的な設計を採用しています。\n</p>\n\n<div class="gh-alert gh-alert-tip mb-6">\n  <div class="gh-alert-title"><i data-lucide="github" class="w-4 h-4 shrink-0"></i><span>オープンソース公開情報 & 開発記録</span></div>\n  <div class="gh-alert-body">\n    本アーキテクチャの完全な設定テンプレートと同期スクリプトは GitHub にて OSS (MIT License) として公開されています。<br>\n    ・<strong>GitHub リポジトリ:</strong> <a href="https://github.com/nigiri-rice-com/hybrid-cloud-storage" target="_blank" class="underline text-emerald-600 dark:text-emerald-400 font-semibold">nigiri-rice-com/hybrid-cloud-storage</a><br>\n    ・<strong>公式開発記録記事:</strong> <a href="https://www.nigiri-rice.com/2026/09/24/hybrid-cloud-storage-architecture/" target="_blank" class="underline text-emerald-600 dark:text-emerald-400 font-semibold">設計と構築の技術詳細（WordPress）</a>\n  </div>\n</div>\n\n<div class="gh-alert gh-alert-note">\n  <div class="gh-alert-title"><i data-lucide="info" class="w-4 h-4 shrink-0"></i><span>7つの必須ドキュメント準拠</span></div>\n  <div class="gh-alert-body">本ページは Qiita 策定基準に基づき、要件定義・技術選定・DB設計・画面/API・遷移フロー・運用Runbook・復旧手順の7要素を完全網羅しています。</div>\n</div>\n\n<h2 id="sec-1-requirements" class="text-2xl font-bold mt-10 mb-4 pb-2 border-b border-slate-200 dark:border-emerald-950/70">1. 要件定義書 (Requirements)</h2>\n<div class="space-y-4 mb-6">\n  <h3 class="text-lg font-semibold text-emerald-600 dark:text-emerald-400">プロジェクト目的 & 背景</h3>\n  <p>Windows Server に依存しないオープンソースの Active Directory ドメインコントローラと、スマホ（iOS/Android）・PC（SMB）・ブラウザ（WebUI）の全デバイスから即時アクセス可能なクラウドストレージ基盤を構築すること。</p>\n  <h3 class="text-lg font-semibold text-emerald-600 dark:text-emerald-400">成功の基準 (KPI / 動作基準)</h3>\n  <ul class="list-disc pl-6 space-y-1">\n    <li><strong>マルチクライアント対応:</strong> iOS「ファイル」アプリ、Android Nextcloud 公式アプリ、Windows PC SMB マウント、WebUI のすべてから同一共有フォルダを操作可能。</li>\n    <li><strong>単一共有ストレージ運用:</strong> ユーザー個別領域を作成せず、全ユーザーが共通共有ストレージ（<code>/srv/shares/public</code>）を閲覧・編集可能。</li>\n    <li><strong>SSO Admin 権限自動昇格:</strong> OmusuBI (Keycloak) で <code>admin</code> ロールを持つユーザーに対し、Nextcloud の <code>admin</code> グループ（全管理者権限）および Samba <code>Domain Admins</code> を自動付与。</li>\n    <li><strong>ドメイン名統一:</strong> Samba ドメイン名（Workgroup）を <code>nigiri-rice</code>（NetBIOS: <code>NIGIRI-RICE</code>）に設定し、SSO アカウントと完全同期。</li>\n    <li><strong>双方向リアルタイム同期:</strong> Windows SMB 側で変更されたファイルが <code>inotifywait</code> により 1 秒以内に Nextcloud にインデックス反映されること。</li>\n    <li><strong>ID プロビジョニング連携:</strong> OmusuBI (Keycloak) を Source of Truth とし、5分間隔で Samba 4 AD DC および Nextcloud にユーザー・グループが自動同期されること。</li>\n  </ul>\n</div>\n\n<h2 id="sec-2-techstack" class="text-2xl font-bold mt-10 mb-4 pb-2 border-b border-slate-200 dark:border-emerald-950/70">2. 技術スタック & 選定理由</h2>\n<p class="mb-4">本システムで採用されている技術コンポーネントとその選定理由です：</p>\n<div class="table-responsive"><table class="gh-table"><thead><tr><th>カテゴリ / レイヤー</th><th>採用技術 / バージョン</th><th>選定理由・メリット</th></tr></thead><tbody>\n<tr><td>クラウドストレージ (現行)</td><td>Nextcloud Hub v35 (Hub 10)</td><td>iOS / Android 公式アプリ対応、WebDAV、iOS「ファイル」アプリ統合、写真自動バックアップ</td></tr>\n<tr><td>クラウドストレージ (移行先)</td><td>Cloudreve v3.8+ (Go Binary)</td><td>超軽量（メモリ数十MB）、高速起動、React モダンWebUI、ローカルストレージ透過連携</td></tr>\n<tr><td>ディレクトリ & SMB</td><td>Samba 4.17+ AD DC (nigiri-rice)</td><td>Windows AD DS 互換ドメインコントローラ、Kerberos 認証、高速 SMB 3.1.1 共有</td></tr>\n<tr><td>Web サーバー</td><td>Nginx 1.22 + PHP 8.3-FPM</td><td>Nextcloud 最適化構成、大容量ファイル（16GB+）アップロード、HTTP/2 対応</td></tr>\n<tr><td>データベース</td><td>MariaDB 10.11 (InnoDB utf8mb4)</td><td>Nextcloud / Cloudreve ファイルメタデータ、権限、タグの高速トランザクション処理</td></tr>\n<tr><td>キャッシュ & ロック</td><td>Redis 7.0</td><td>セッションキャッシュおよび分散ファイルロック（Memcache & Locking）</td></tr>\n<tr><td>リアルタイム検知</td><td>inotify-tools (inotifywait)</td><td>SMB 経由のファイル追加・更新をカーネルレベルで即座に検知しストレージへ自動同期</td></tr>\n<tr><td>リバースプロキシ</td><td>Caddy v2 (VPS)</td><td>Let\'s Encrypt 自動 TLS 終端、Cloudflare プロキシバイパス（100MB制限回避）、WebDAV リダイレクト</td></tr>\n</tbody></table></div>\n\n<h2 id="sec-3-database" class="text-2xl font-bold mt-10 mb-4 pb-2 border-b border-slate-200 dark:border-emerald-950/70">3. データベース & ストレージ設計</h2>\n<div class="space-y-4 mb-6">\n  <p>Proxmox VE ホスト上の特権 LXC コンテナ <code>CT 144 (fs-ad-server)</code> 内の ZFS プール上にストレージが配置されています：</p>\n  <ul class="list-disc pl-6 space-y-1">\n    <li><strong>共通共有ストレージ:</strong> <code>/srv/shares/public</code> (POSIX ACL: <code>u:www-data:rwx,g:www-data:rwx,o:rwx</code>, default ACL 継承)</li>\n    <li><strong>Nextcloud マウント:</strong> <code>files_external</code> (Local) によりルート直下に <code>/Public</code> として自動マウント</li>\n    <li><strong>Cloudreve 連携パス:</strong> ストレージ保存ルールを <code>{path}/{filename}</code> とし、<code>/srv/shares/public</code> と直接同期</li>\n    <li><strong>個人クォータ制限:</strong> <code>default_quota => 0 B</code> に設定し、個人専用領域を使わせず共通ストレージへ誘導</li>\n    <li><strong>Samba 共有設定:</strong> <code>oplocks = no</code>, <code>level2 oplocks = no</code> により Windows キャッシュによる同期遅延を防止</li>\n  </ul>\n</div>\n\n<h2 id="sec-4-screen-api" class="text-2xl font-bold mt-10 mb-4 pb-2 border-b border-slate-200 dark:border-emerald-950/70">4. 画面 & API 仕様 (モバイル / PC / リモート接続 / SSO Admin)</h2>\n<div class="space-y-4 mb-6">\n  <h3 class="text-lg font-semibold text-emerald-600 dark:text-emerald-400">🌐 リモート環境からの 3 つの接続方法</h3>\n  <p>外出先・自宅・スマホなどリモート環境からファイルサーバーを利用する方法です：</p>\n  <ul class="list-disc pl-6 space-y-2 text-sm mb-4">\n    <li><strong>方式1: Web ブラウザ（VPN 不要・世界中から直接アクセス）</strong><br>\n      URL: <code>https://fs.nigiri-rice.com/</code><br>\n      OmusuBI SSO（Keycloak）でログイン。ファイルのドラッグ＆ドロップ、大容量アップロード、PDF・文書プレビュー、外部共有リンク発行が可能。</li>\n    <li><strong>方式2: スマホアプリ（iOS / Android）</strong><br>\n      「Nextcloud」公式アプリでサーバーアドレスに <code>https://fs.nigiri-rice.com</code> を設定。iOS 標準「ファイル」アプリ統合およびカメラロール自動写真バックアップが社外からそのまま動作します。</li>\n    <li><strong>方式3: リモート PC からのエクスプローラー SMB マウント（Tailscale VPN 経由）</strong><br>\n      SMB（Port 445）は安全のため Tailscale 暗号化トンネルを経由します。リモート端末で Tailscale にログインしていれば、社外でも社内 LAN と全く同様に以下の構文でマウント可能です。</li>\n  </ul>\n\n  <h3 class="text-lg font-semibold text-emerald-600 dark:text-emerald-400">🔑 OmusuBI SSO Admin ロール管理者権限マッピング</h3>\n  <p class="text-sm">Keycloak (OmusuBI SSO) において <code>admin</code> ロールを付与されているアカウントは、Nextcloud へ OIDC SSO ログインした際に自動的に Nextcloud の <code>admin</code> グループへマッピングされます。<br>\n  これにより、特別な管理者ログインURLや個別パスワードを使用せず、OmusuBI の SSO 認証のみで全管理機能（システム設定、ユーザー管理、アプリ管理）へアクセス可能になります。</p>\n\n  <h3 class="text-lg font-semibold text-emerald-600 dark:text-emerald-400">💻 Windows / Mac PC からの SMB マウント手順 (ドメイン: nigiri-rice)</h3>\n  <div class="code-block-wrapper">\n    <div class="code-header"><span class="code-lang">powershell</span></div>\n    <pre><code class="language-powershell"># Windows PowerShell / コマンドプロンプト\nnet use \\\\\\\\10.155.0.144\\\\public /user:nigiri-rice\\\\i.shimamoto <SSOパスワード></code></pre>\n  </div>\n  <p class="text-xs text-slate-500 mt-1">※ユーザー名は <code>nigiri-rice\\&lt;ユーザー名&gt;</code> または <code>&lt;ユーザー名&gt;@nigiri-rice.com</code> を指定してください。</p>\n</div>\n\n<h2 id="sec-5-flow" class="text-2xl font-bold mt-10 mb-4 pb-2 border-b border-slate-200 dark:border-emerald-950/70">5. 処理フロー & シーケンス図</h2>\n<p class="mb-4">マルチデバイスからのアクセスと双方向同期のアーキテクチャフローです：</p>\n<div class="mermaid-wrapper my-6 p-4 rounded-xl border border-slate-200 dark:border-emerald-950/60 bg-slate-50/50 dark:bg-emerald-950/10">\n<pre class="mermaid text-sm">sequenceDiagram\n    autonumber\n    actor Mobile as スマホ (iOS/Android)\n    actor PC as Windows / Mac (Tailscale)\n    participant Caddy as VPS Caddy (fs.nigiri-rice.com)\n    participant NC as Nextcloud Hub / Cloudreve (CT 144)\n    participant KC as OmusuBI Keycloak (sso.nigiri-rice.com)\n    participant Watch as inotifywait Watcher\n    participant Storage as 共通共有 /srv/shares/public\n    participant Samba as Samba 4 AD (nigiri-rice)\n\n    rect rgb(240, 253, 250)\n    Note over Mobile,KC: 経路 A: SSO ログイン & Admin権限自動付与\n    Mobile->>Caddy: HTTPS :443 (fs.nigiri-rice.com)\n    Caddy->>NC: Tailscale Proxy (Port 8080)\n    NC->>KC: OIDC 認証リクエスト\n    KC-->>NC: ID Token (roles: [admin])\n    NC->>NC: admin グループ自動割当 (全権昇格)\n    NC->>Storage: POSIX ACL 経由で直接読み書き\n    end\n\n    rect rgb(254, 243, 199)\n    Note over PC,NC: 経路 B: リモート / 社内 PC (SMB) からの直接書き込み\n    PC->>Samba: SMB Port 445 (Tailscale VPN経由)\n    Samba->>Storage: ディスク書き込み\n    Storage->>Watch: Linux カーネル inotify イベント発火\n    Watch->>NC: occ / sync スキャン即時実行\n    NC-->>Mobile: モバイルアプリ / WebUI に即座にプッシュ反映\n    end\n</pre>\n</div>\n\n<h2 id="sec-6-runbook" class="text-2xl font-bold mt-10 mb-4 pb-2 border-b border-slate-200 dark:border-emerald-950/70">6. README & 運用保守手順書 (Runbook)</h2>\n<p class="mb-4">障害調査やメンテナンス時に実行する主要コマンド集です：</p>\n<div class="space-y-4 mb-6">\n  <div class="code-block-wrapper">\n    <div class="code-header"><span class="code-lang">bash</span></div>\n    <pre><code class="language-bash"># CT 144 へログイン\nssh root@10.155.0.144\n\n# Nextcloud 診断ステータス確認\nsudo -u www-data php /var/www/nextcloud/occ status\n\n# Nextcloud OIDC Admin ロール権限マッピング設定 (groupsクレームとadminグループの紐付け)\nsudo -u www-data php /var/www/nextcloud/occ user_oidc:provider:update 1 \\\n  --mapping-groups=groups \\\n  --group-mapping=\'{\"admin\": \"admin\", \"Admin\": \"admin\"}\'\n\n# admin グループ所属ユーザー確認\nsudo -u www-data php /var/www/nextcloud/occ group:list-members admin\n\n# 手動での管理者権限付与 (即時有効化)\nsudo -u www-data php /var/www/nextcloud/occ group:adduser admin i.shimamoto\n\n# 全ファイル手動スキャン\nsudo -u www-data php /var/www/nextcloud/occ files:scan --all\n\n# SMB ファイル監視デーモンの稼働状態\nsystemctl status nextcloud-smb-watch.service\n\n# Samba 4 AD DC ドメインコントローラの状態 (nigiri-rice)\nsystemctl status samba-ad-dc\n\n# OmusuBI からのユーザー/グループ同期手動実行\npython3 /usr/local/bin/sync_omusubi_to_samba.py\n</code></pre>\n  </div>\n</div>\n\n<h2 id="sec-7-setup" class="text-2xl font-bold mt-10 mb-4 pb-2 border-b border-slate-200 dark:border-emerald-950/70">7. 障害復旧 & Cloudreve 移行計画</h2>\n<div class="space-y-4 mb-6">\n  <h3 class="text-lg font-semibold text-emerald-600 dark:text-emerald-400">Cloudreve 段階的移行ステップ</h3>\n  <ol class="list-decimal pl-6 space-y-1 text-sm">\n    <li><strong>バイナリ配置:</strong> CT 144 上に Cloudreve 公式 amd64 バイナリを設置し、Port 5212 で起動。</li>\n    <li><strong>ストレージマウント:</strong> 保存先ディレクトリを <code>/srv/shares/public</code>、命名規則を <code>{path}/{filename}</code> に指定。</li>\n    <li><strong>Keycloak OAuth 2.0 連携:</strong> OmusuBI SSO クライアント <code>cloudreve</code> を作成し、SSO ログインを検証。</li>\n    <li><strong>並行検証:</strong> VPS Caddy に <code>drive.nigiri-rice.com</code> を追加し、Nextcloud を止めずに並行テスト。</li>\n    <li><strong>本番昇格:</strong> 検証完了後、<code>fs.nigiri-rice.com</code> の転送先を Port 5212 へ切り替え。</li>\n  </ol>\n\n  <h3 class="text-lg font-semibold text-emerald-600 dark:text-emerald-400">MariaDB バックアップ & リストア</h3>\n  <div class="code-block-wrapper">\n    <div class="code-header"><span class="code-lang">bash</span></div>\n    <pre><code class="language-bash"># バックアップ取得\nmariadb-dump -u nextcloud -p\'NextcloudDb2026!Secure\' nextcloud > /var/backups/nextcloud-$(date +%Y%m%d).sql\n\n# リストア手順\nmariadb -u nextcloud -p\'NextcloudDb2026!Secure\' nextcloud < /var/backups/nextcloud-20260918.sql\nsudo -u www-data php /var/www/nextcloud/occ maintenance:mode --off</code></pre>\n  </div>\n</div>\n',
     'id': 'fs-storage',
     'title': 'Nextcloud Hub ＆ Samba 4 AD 統合クラウドストレージ',
     'toc': [
@@ -3218,7 +3218,152 @@ sqlite3 /opt/uptime-kuma/data/kuma.db ".backup /opt/uptime-kuma/data/kuma.db.bak
                           {'id': 'sec-4-screen-api', 'level': 2, 'title': '4. 画面 & API 仕様設計書'},
                           {'id': 'sec-5-flow', 'level': 2, 'title': '5. 処理フロー & シーケンス図'},
                           {'id': 'sec-6-runbook', 'level': 2, 'title': '6. README & 運用保守手順書'},
-                          {'id': 'sec-7-setup', 'level': 2, 'title': '7. 環境構築 & 障害復旧手順'}]}}
+                          {'id': 'sec-7-setup', 'level': 2, 'title': '7. 環境構築 & 障害復旧手順'}]},
+  'secure-print': {
+    'badges': ['7つの必須ドキュメント準拠', 'Verified: 2026-10-03', 'AES-256-GCM', 'Pull-Print', 'OSS公開'],
+    'category_id': 'standalone',
+    'category_name': 'メール & 独立サービス',
+    'content_html': '''
+<p class="lead text-lg text-slate-600 dark:text-slate-300 mb-6">
+  家庭用小型インクジェット（Brother MFC-J998DN 等）からオフィス大型複合機（Canon iR-ADV C5550 等）まで、あらゆるプリンターでセキュアなオンデマンド印刷を実現するエンタープライズ印刷管理基盤。<br>
+  専用サービスドメイン <code>https://print.nigiri-rice.com/</code> にて本番運用されています。
+</p>
+
+<div class="gh-alert gh-alert-tip mb-6">
+  <div class="gh-alert-title"><i data-lucide="github" class="w-4 h-4 shrink-0"></i><span>オープンソース公開情報 & リポジトリ</span></div>
+  <div class="gh-alert-body">
+    本印刷基盤の設計・ソースコード・設定ファイル・テストスイートは GitHub にて公開・管理されています。<br>
+    ・<strong>GitHub リポジトリ:</strong> <a href="https://github.com/nigiri-rice-com/print.nigiri-rice.com" target="_blank" class="underline text-emerald-600 dark:text-emerald-400 font-semibold">nigiri-rice-com/print.nigiri-rice.com</a> (MIT License)
+  </div>
+</div>
+
+<div class="gh-alert gh-alert-note">
+  <div class="gh-alert-title"><i data-lucide="info" class="w-4 h-4 shrink-0"></i><span>7つの必須ドキュメント準拠</span></div>
+  <div class="gh-alert-body">本ページは Qiita 策定基準に基づき、要件定義・技術選定・暗号化スプール設計・画面/API仕様・シーケンス図・運用Runbook・復旧手順の7要素を完全網羅しています。</div>
+</div>
+
+<h2 id="sec-1-requirements" class="text-2xl font-bold mt-10 mb-4 pb-2 border-b border-slate-200 dark:border-emerald-950/70">1. 要件定義書 (Requirements)</h2>
+<div class="space-y-4 mb-6">
+  <h3 class="text-lg font-semibold text-emerald-600 dark:text-emerald-400">プロジェクト目的 & 背景</h3>
+  <p>従来の「印刷指示を出した瞬間に勝手に出てくる」プッシュ印刷では、排紙トレイへの書類放置による機密漏洩・盗難・取り違えが発生していました。本システムではゼロトラストおよび「現地放出原則 (Release-on-Arrival)」に基づき、利用者がプリンター実機に到着してQRコードを読み取った瞬間のみ印刷を実行するオンデマンド印刷環境を実現します。</p>
+  <h3 class="text-lg font-semibold text-emerald-600 dark:text-emerald-400">成功の基準 (KPI / 動作基準)</h3>
+  <ul class="list-disc pl-6 space-y-1">
+    <li><strong>家庭用からオフィス大型機までの普遍的対応:</strong> ICカードリーダーやタッチパネルのない家庭用プリンターでも、スマホカメラによるQR照合で放置印刷を防止。</li>
+    <li><strong>組織内Publicでも認証必須:</strong> 社外秘資料の混入を防ぐため、Public/Personalいずれのキューも Keycloak SSO ログインを完全必須化。</li>
+    <li><strong>本人限定アクセスガード:</strong> アップロードした本人以外は、他人のPCや別アカウントからドキュメントを開く・閲覧・ダウンロードすることを厳格遮断。</li>
+    <li><strong>保持期間ライフサイクル:</strong> Publicキューは1週間 (168時間)、Personalキューは3日間 (72時間) 自動保持。ワンクリックで +24時間延長可能。</li>
+    <li><strong>確実な安全削除:</strong> id.nigiri-rice.com スタイルの削除確認モーダルにより誤操作を防止し、削除確定時はスプールから即時完全消去。</li>
+    <li><strong>プリンター貼付用QRステッカー発行:</strong> A4 / シール用紙に実寸で印刷できるステッカー台紙モーダルおよび動的QR画像配信 (<code>/print/qr/{id}</code>) を完備。</li>
+  </ul>
+</div>
+
+<h2 id="sec-2-techstack" class="text-2xl font-bold mt-10 mb-4 pb-2 border-b border-slate-200 dark:border-emerald-950/70">2. 技術スタック & 選定理由</h2>
+<div class="table-responsive"><table class="gh-table"><thead><tr><th>カテゴリ / レイヤー</th><th>採用技術 / バージョン</th><th>選定理由・メリット</th></tr></thead><tbody>
+<tr><td>ゲートウェイコア</td><td>Python 3.10+ / aiohttp</td><td>高スループット非同期I/O、軽量常駐、スプール暗号化・復号の高速処理</td></tr>
+<tr><td>認証 & IDプロバイダ</td><td>Keycloak SSO (id.nigiri-rice.com)</td><td>社内統一アカウント、OpenID Connect、MFA (TOTP/WebAuthn) 連携</td></tr>
+<tr><td>暗号化アルゴリズム</td><td>AES-256-GCM</td><td>認証タグ付き暗号化 (AEAD) による改ざん検知、平文ディスク保存の完全防止</td></tr>
+<tr><td>プリンター出力プロトコル</td><td>RAW Socket (Port 9100) / IPP</td><td>メーカー問わず全プリンター共通のダイレクトソケット送出</td></tr>
+<tr><td>ネットワークトンネル</td><td>WireGuard (Site-to-Site)</td><td>VPSから宅内・オフィスLANへのセキュアかつ低遅延な暗号化閉域通信</td></tr>
+<tr><td>リバースプロキシ</td><td>Caddy v2 (210.131.211.17)</td><td>Let's Encrypt 自動TLS終端、Cloudflare Full SSL 連携</td></tr>
+</tbody></table></div>
+
+<h2 id="sec-3-database" class="text-2xl font-bold mt-10 mb-4 pb-2 border-b border-slate-200 dark:border-emerald-950/70">3. データベース & 暗号化スプール設計</h2>
+<div class="space-y-4 mb-6">
+  <ul class="list-disc pl-6 space-y-1">
+    <li><strong>スプール保存領域:</strong> <code>/srv/secure-shares/print_spool/</code> (パーミッション: 0700)</li>
+    <li><strong>バイナリ暗号化フォーマット:</strong> <code>[ 12 bytes: IV ] + [ 16 bytes: GCM Tag ] + [ 暗号化ペイロード ]</code></li>
+    <li><strong>動的フリート台帳:</strong> <code>printers.json</code> (プリンターID、名称、IP、ポート、プロトコル、用紙サイズ、QRセキュリティトークン)</li>
+    <li><strong>ジョブメタデータ:</strong> <code>jobs/{job_id}.json</code> (所有者ID、有効期限、キュー種別、ファイル名、サイズ、ページ数)</li>
+  </ul>
+</div>
+
+<h2 id="sec-4-screen-api" class="text-2xl font-bold mt-10 mb-4 pb-2 border-b border-slate-200 dark:border-emerald-950/70">4. 画面 & API 仕様設計書</h2>
+<div class="space-y-4 mb-6">
+  <p>主要エンドポイントと画面機能：</p>
+  <ul class="list-disc pl-6 space-y-2 text-sm">
+    <li><code>GET /print/ui</code>: id.nigiri-rice.com 準拠 4大モード切替ポータル（Public / Personal / 機器管理 / 操作ガイド）</li>
+    <li><code>POST /print/api/upload</code>: ドキュメント暗号化スプール登録 API</li>
+    <li><code>POST /print/api/print</code>: QRトークン照合 ＆ プリンター実機へのRAWソケット印刷実行 API</li>
+    <li><code>POST /print/api/extend</code>: 保持期間 +24時間 延長 API</li>
+    <li><code>POST /print/api/delete</code>: 確認モーダル承認後の即時完全抹消 API</li>
+    <li><code>GET /print/qr/{printer_id}</code>: プリンター貼付用ベクター高精細 PNG 画像動的配信</li>
+  </ul>
+</div>
+
+<h2 id="sec-5-flow" class="text-2xl font-bold mt-10 mb-4 pb-2 border-b border-slate-200 dark:border-emerald-950/70">5. 処理フロー & シーケンス図</h2>
+<div class="mermaid-wrapper my-6 p-4 rounded-xl border border-slate-200 dark:border-emerald-950/60 bg-slate-50/50 dark:bg-emerald-950/10">
+<pre class="mermaid text-sm">sequenceDiagram
+    autonumber
+    actor User as 利用者 (スマホ/PC)
+    participant Caddy as VPS Caddy (print.nigiri-rice.com)
+    participant GW as 印刷ゲートウェイ (aiohttp:10029)
+    participant KC as Keycloak SSO (id.nigiri-rice.com)
+    participant Spool as 暗号化スプール (AES-256-GCM)
+    participant Printer as プリンター実機 (10.155.0.155:9100)
+
+    User->>Caddy: 1. 印刷ファイルアップロード
+    Caddy->>GW: リクエスト中継
+    GW->>KC: SSOセッション & 本人確認
+    GW->>Spool: AES-256-GCM 暗号化してディスク格納 (平文残存ゼロ)
+    GW-->>User: スプール受付完了 (期限カウントダウン開始)
+
+    Note over User,Printer: 2. 利用者がプリンター実機へ移動
+    User->>GW: 3. 「印刷」押下 & 本体のQRステッカーをカメラでスキャン
+    GW->>GW: QRトークン検証 (256-bit暗号トークン照合)
+    GW->>Spool: 暗号化スプールをメモリ上で復号
+    GW->>Printer: WireGuard経由で RAW Socket (Port 9100) ダイレクト送出
+    Printer-->>User: 目の前で即座に出力完了 (放置ゼロ)
+    GW->>Spool: 印刷完了スプールジョブを完全抹消
+</pre>
+</div>
+
+<h2 id="sec-6-runbook" class="text-2xl font-bold mt-10 mb-4 pb-2 border-b border-slate-200 dark:border-emerald-950/70">6. README & 運用保守手順書 (Runbook)</h2>
+<div class="code-block-wrapper">
+  <div class="code-header"><span class="code-lang">bash</span></div>
+  <pre><code class="language-bash"># サービス状態確認
+systemctl status mailcow-secure-share.service
+
+# サービス再起動
+systemctl restart mailcow-secure-share.service
+
+# リアルタイムログ監視
+journalctl -u mailcow-secure-share.service -f --tail=50
+
+# プリンター死活監視 & 健全性診断スクリプト実行
+python3 /opt/mailcow-attachment-linker/health_check.py
+
+# 実機へのネットワーク疎通テスト (Brother MFC-J998DN)
+nc -z -v -w3 10.155.0.155 9100
+</code></pre>
+</div>
+
+<h2 id="sec-7-setup" class="text-2xl font-bold mt-10 mb-4 pb-2 border-b border-slate-200 dark:border-emerald-950/70">7. 環境構築 & プリンター機器追加手順</h2>
+<div class="space-y-4 mb-6">
+  <ol class="list-decimal pl-6 space-y-2 text-sm">
+    <li><strong>Web管理画面を開く:</strong> <code>https://print.nigiri-rice.com/print/ui</code> にログインし「プリンター台帳管理」タブを選択。</li>
+    <li><strong>新規プリンター追加:</strong> プリンターID、表示名、プロトコル（RAW/IPP）、IPアドレス、設置場所を入力して保存。</li>
+    <li><strong>QRステッカー発行:</strong> 「貼付用QR印刷」をクリックし、A4用紙やシール用紙に実寸印刷してプリンター本体の操作パネル脇に貼付。</li>
+    <li><strong>疎通テスト:</strong> 管理画面から「接続テスト」を実行し、ステータスが「ONLINE」になることを確認。</li>
+  </ol>
+</div>
+''',
+    'description': '家庭用小型プリンターから大型複合機まで対応するゼロトラスト・オンデマンド印刷基盤。AES-256-GCM暗号化スプール、Keycloak SSO認証、現地QRコード近接照合、動的フリート台帳、貼付用QRステッカー発行。',
+    'icon': 'printer',
+    'id': 'secure-print',
+    'last_updated': '2026-10-03',
+    'service_id': 'secure_print',
+    'title': 'OmusuBI Universal Secure Print 運用保守マニュアル',
+    'toc': [
+      {'id': 'sec-1-requirements', 'level': 2, 'title': '1. 要件定義書 (Requirements)'},
+      {'id': 'sec-2-techstack', 'level': 2, 'title': '2. 技術スタック & 選定理由'},
+      {'id': 'sec-3-database', 'level': 2, 'title': '3. データベース & 暗号化スプール設計'},
+      {'id': 'sec-4-screen-api', 'level': 2, 'title': '4. 画面 & API 仕様設計書'},
+      {'id': 'sec-5-flow', 'level': 2, 'title': '5. 処理フロー & シーケンス図'},
+      {'id': 'sec-6-runbook', 'level': 2, 'title': '6. README & 運用保守手順書'},
+      {'id': 'sec-7-setup', 'level': 2, 'title': '7. 環境構築 & 機器追加手順'}
+    ]
+  }
+}
 
 def get_category_docs(category_id: str) -> List[Dict[str, Any]]:
     return [d for d in DOCS.values() if d.get("category_id") == category_id]
